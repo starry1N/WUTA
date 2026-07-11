@@ -1,5 +1,6 @@
 Panels:
   - Class: rviz_common/Displays
+    Help Height: 70
     Name: Displays
     Property Tree Widget:
       Expanded:
@@ -7,24 +8,34 @@ Panels:
         - /Simulation1
         - /FSD Pipeline1
       Splitter Ratio: 0.5
+    Tree Height: 609
   - Class: rviz_common/Views
+    Expanded:
+      - /Current View1
     Name: Views
+    Splitter Ratio: 0.5
   - Class: rviz_common/Time
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: ""
+    SyncSource: Simulated LiDAR
 Visualization Manager:
   Class: ""
   Displays:
-    - Class: rviz_default_plugins/Grid
+    - Alpha: 0.5
       Cell Size: 1
+      Class: rviz_default_plugins/Grid
       Color: 160; 160; 164
       Enabled: true
       Line Style:
         Line Width: 0.029999999329447746
         Value: Lines
       Name: Grid
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
       Plane: XY
       Plane Cell Count: 40
       Reference Frame: map
@@ -34,6 +45,12 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: true
+        base_link:
+          Value: true
+        lidar:
+          Value: true
+        map:
+          Value: true
       Marker Scale: 1
       Name: TF
       Show Arrows: true
@@ -123,27 +140,28 @@ Visualization Manager:
           Value: true
         - Class: rviz_default_plugins/MarkerArray
           Enabled: true
-          Marker Topic:
+          Name: Visible Cones
+          Namespaces:
+            {}
+          Topic:
             Depth: 5
             Durability Policy: Volatile
             History Policy: Keep Last
             Reliability Policy: Reliable
             Value: /sim/lidar/visible_cones
-          Name: Visible Cones
-          Namespaces:
-            {}
           Value: true
         - Class: rviz_default_plugins/MarkerArray
           Enabled: true
-          Marker Topic:
+          Name: Loaded Track Cones (YAML Ground Truth)
+          Namespaces:
+            track_cones: true
+            track_cone_info: true
+          Topic:
             Depth: 5
-            Durability Policy: Volatile
+            Durability Policy: Transient Local
             History Policy: Keep Last
             Reliability Policy: Reliable
             Value: /sim/lidar/track_cones
-          Name: Loaded Track Cones
-          Namespaces:
-            {}
           Value: true
       Enabled: true
       Name: Simulation
@@ -151,51 +169,51 @@ Visualization Manager:
       Displays:
         - Class: rviz_default_plugins/MarkerArray
           Enabled: true
-          Marker Topic:
+          Name: Perception Cones
+          Namespaces:
+            {}
+          Topic:
             Depth: 5
             Durability Policy: Volatile
             History Policy: Keep Last
             Reliability Policy: Reliable
             Value: /perception/lidar/cones_viz
-          Name: Perception Cones
-          Namespaces:
-            {}
           Value: true
         - Class: rviz_default_plugins/MarkerArray
           Enabled: true
-          Marker Topic:
+          Name: Cone Map
+          Namespaces:
+            {}
+          Topic:
             Depth: 5
             Durability Policy: Volatile
             History Policy: Keep Last
             Reliability Policy: Reliable
             Value: /mapping/cone_map_viz
-          Name: Cone Map
-          Namespaces:
-            {}
           Value: true
         - Class: rviz_default_plugins/MarkerArray
           Enabled: true
-          Marker Topic:
+          Name: Centerline
+          Namespaces:
+            {}
+          Topic:
             Depth: 5
             Durability Policy: Volatile
             History Policy: Keep Last
             Reliability Policy: Reliable
             Value: /planning/centerline_viz
-          Name: Centerline
-          Namespaces:
-            {}
           Value: true
         - Class: rviz_default_plugins/MarkerArray
           Enabled: true
-          Marker Topic:
+          Name: Control Target
+          Namespaces:
+            {}
+          Topic:
             Depth: 5
             Durability Policy: Volatile
             History Policy: Keep Last
             Reliability Policy: Reliable
             Value: /control/target_viz
-          Name: Control Target
-          Namespaces:
-            {}
           Value: true
       Enabled: true
       Name: FSD Pipeline
@@ -220,36 +238,37 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 35
+      Distance: 45.78459548950195
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 10
-        Y: 0
-        Z: 0
-      Focal Shape Fixed Size: false
+        X: 7.269336700439453
+        Y: -0.6332504749298096
+        Z: 6.262657165527344
+      Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.7853981852531433
+      Pitch: 0.7121978402137756
       Target Frame: map
       Value: Orbit (rviz_default_plugins)
-      Yaw: 0.7853981852531433
+      Yaw: 4.140404224395752
     Saved: ~
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 900
+  Height: 1418
   Hide Left Dock: false
   Hide Right Dock: false
+  QMainWindow State: 000000ff00000000fd00000001000000000000044700000530fc0200000003fb000000100044006900730070006c006100790073010000003d000002e4000000c900fffffffb0000000a005600690065007700730100000327000001e0000000a400fffffffb0000000800540069006d0065010000050d000000600000003900ffffff000005cb0000053000000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Time:
     collapsed: false
   Views:
     collapsed: false
-  Width: 1400
-  X: 80
-  Y: 80
+  Width: 2584
+  X: 70
+  Y: 27
