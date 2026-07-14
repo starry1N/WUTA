@@ -1,1 +1,0 @@
-/home/ubuntu22/WUTA/WUTA-SIM/build/vehicle_model/launch/vehicle_model.launch.py

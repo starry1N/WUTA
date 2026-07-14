@@ -1,1 +1,0 @@
-/home/ubuntu22/WUTA/WUTA-SIM/build/lidar_sim/launch/lidar_simulator.launch.py
