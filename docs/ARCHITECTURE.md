@@ -34,6 +34,7 @@ graph TD
   VM -->|/sim/ground_truth| INS[ins_simulator]
   LS -->|/hesai/pandar| LD[lidar_detection_node]
   LS -->|/hesai/pandar| KISS[kiss_icp_node]
+  LS -->|scan stamp| SB
   KISS -->|/kiss/odometry| EKF[ekf_node]
   INS -->|/cg410/odometry| EKF
   EKF -->|/odometry/filtered| LM[localization_manager]
@@ -54,6 +55,7 @@ graph TD
   CAN -->|/localization/velocity| CTRL
   MM -->|/system/mission_state| CTRL
   CTRL -->|/control/command| VM
+  CTRL -->|command stamp| SB
   CTRL -->|/system/mission_complete| MM
   TFSTATICMAP[static_transform_publisher] -->|map -> odom TF| RVIZ
   EKF -->|odom -> base_link TF| RVIZ
@@ -72,7 +74,7 @@ graph TD
 | `can_simulator` | `can_simulator` | 是 | 从仿真里程计复制速度；`/sim/ground_truth` → `/localization/velocity` |
 | `ins_simulator` | `ins_simulator` submodule | 是 | 真值加噪的 CG-410 适配；`/sim/ground_truth` → `/cg410/odometry` |
 | `lidar_simulator` | `lidar_sim` | 是 | YAML 赛道/车辆位姿生成点云与真值 marker；`/sim/ground_truth` → `/hesai/pandar`、`/sim/lidar/*` |
-| `simulation_bridge` | `simulator_bringup` | 是 | 就绪、仿真开始输入、真值调试 pose/TF 与状态可视化；不发布 MissionState |
+| `simulation_bridge` | `simulator_bringup` | 是 | 就绪、仿真开始输入、真值单圈计时、LiDAR→命令延迟、真值调试 pose/TF 与状态可视化；不发布 MissionState |
 | `lidar_detection_node` | `lidar_detection` | 是（`launch_fsd`） | PCL/DL 检测；`/hesai/pandar` → `/perception/lidar/cones`、可视化 |
 | `cone_map_builder_node` | `cone_map_builder` | 是（`launch_fsd`） | TF 变换、去重/闭环；检测与 pose → `/mapping/cone_map` |
 | `boundary_detector_node` | `boundary_detector` | 是（`launch_fsd`） | Delaunay 中点中心线；地图、位姿、任务 → `/planning/centerline` |

@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | 车辆仿真 | `VehicleModel`；`WUTA-SIM/vehicle_model/src/vehicle_model/vehicle_model/vehicle_model.py` | 订阅命令；按 `dt` 积分自行车模型并发布 Odometry |
 | LiDAR 仿真 | `LidarSimulatorNode`、`LidarSimulator`；`WUTA-SIM/perception_simulation/lidar_sim/` | 加载 YAML；启动时发布静态地图；定时生成 scan |
-| 仿真桥接 | `SimulationBridge`；`WUTA-SIM/simulator_bringup/simulator_bringup/simulation_bridge.py` | 发布就绪和仿真开始输入；订阅 MissionState 做状态可视化；真值 pose/TF 仅作显式回退 |
+| 仿真桥接 | `SimulationBridge`；`WUTA-SIM/simulator_bringup/simulator_bringup/simulation_bridge.py` | 发布就绪和仿真开始输入；以真值跨线计单圈、以 LiDAR/命令头时间戳计延迟；订阅 MissionState 做状态可视化；真值 pose/TF 仅作显式回退 |
 | 任务状态机 | `MissionManager`；`WUTA-FSD/ros2_ws/src/system/mission_manager/` | 唯一发布 MissionState；就绪后 READY，开始输入进入 EXPLORE，完成输入进入 FINISH |
 | 感知 | `LidarDetectionNode` 与 `TraditionalDetector`；`WUTA-FSD/.../perception/lidar_detection/` | PointCloud2 转 PCL，检测后发布 ConeArray |
 | 锥筒地图 | `ConeMapBuilder`；`WUTA-FSD/.../mapping/cone_map_builder/` | 用 TF 变换检测，去重、颜色分配、闭环和定时发布 |
@@ -79,6 +79,17 @@ TF 假设。
 ready 后进入 READY，收到 `/system/start_command` 后进入 EXPLORE，收到控制器的
 `/system/mission_complete` 后进入 FINISH。`manual_ready:=true` 时，bridge 以 RViz
 `/clicked_point` 锁存人工 ready，供调试状态机。
+
+### 2.6 仿真赛项指标
+
+`SimulationBridge` 以 `/sim/ground_truth` 的 `Odometry.header.stamp` 和位置计算成绩，因此
+不受 INS/KISS-ICP/EKF 估计误差影响。Acceleration 从 `x=0` 起点线到 `x=75` 终点线；
+Skidpad 在 `x=0` 的同一条线完成每个圆；Trackdrive 使用两个橙色锥桶间的 `x=0` 起终线。
+仅在 `EXPLORE` 或 `RACE` 期间的 +X 跨线有效，并检查横向线段范围和最短单圈时间。
+
+控制器每次发布 `autoware_msgs/Command` 前填充 `header.stamp`。bridge 保存最新
+`/hesai/pandar.header.stamp`，在收到命令时发布两者之差到 `/system/simulator_latency`；这表示
+从最近一帧 LiDAR 采样发布到控制命令发布的端到端时延，不包含 DDS 到 bridge 的观测延迟。
 
 ## 3. Communication and Concurrency Design
 

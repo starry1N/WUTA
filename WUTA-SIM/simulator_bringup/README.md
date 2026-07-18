@@ -26,8 +26,24 @@ INS 将 ground truth 加噪后发布 `/cg410/odometry`，KISS-ICP 从 `/hesai/pa
 pose/TF 仅在 `use_ground_truth_localization:=true` 时启用。
 
 RViz 默认显示 `/system/status_viz`：任务模式、`EXPLORE/FINISH` 状态、
-`/system/mission_complete` 对应的完成状态以及 `/sim/ground_truth` 的速度和位置。该话题只用于调试显示，
+`/system/mission_complete` 对应的完成状态、`/sim/ground_truth` 的速度和位置、最近单圈用时以及
+LiDAR 到控制命令的延迟。该话题只用于调试显示，
 不参与控制或定位。
+
+### 单圈用时与仿真延迟
+
+`simulation_bridge` 只在 `EXPLORE/RACE` 中以 `/sim/ground_truth` 的真值位姿和时间戳计时：
+Acceleration 为 `x=0` 到 `x=75 m`，Skidpad 为 `x=0` 同向跨线的一圈，Trackdrive 为两个橙色锥桶
+定义的 `x=0` 起终线一圈。每次完成发布 `/system/lap_time`（`std_msgs/Float64`，秒）。
+
+每个 `/control/command` 均带有控制器填写的 `header.stamp`；bridge 发布
+`/system/simulator_latency`（`std_msgs/Float64`，秒）为该时间戳减去最新
+`/hesai/pandar.header.stamp`。可直接观察：
+
+```bash
+ros2 topic echo /system/lap_time
+ros2 topic echo /system/simulator_latency
+```
 
 ### RViz 手动就绪调试
 

@@ -33,7 +33,10 @@ install/simulator_bringup/share/simulator_bringup/rviz/wuta_simulator.rviz
 
 `Driven Trajectory` 使用 `/localization/pose`，只在 marker 生成时做平滑/降采样；它反映定位
 估计，不等同于 `/sim/ground_truth`。`Final Waypoints` 显示 path_generator 的当前目标路径。
-状态 marker 显示 mission/state/complete、真值速度和位置。
+状态 marker 显示 mission/state/complete、真值速度和位置、最近单圈用时与 LiDAR→控制命令延迟。
+单圈计时使用 `/sim/ground_truth`，因此只用于赛道仿真真值分析；延迟使用
+`/control/command.header.stamp - /hesai/pandar.header.stamp`，单位为秒，分别发布到
+`/system/lap_time` 与 `/system/simulator_latency`。
 
 ## MissionState 所有权与手动就绪
 

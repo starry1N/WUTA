@@ -13,7 +13,7 @@
 | Topic | Type | Publisher | Subscriber | 频率 / QoS |
 | --- | --- | --- | --- | --- |
 | `/sim/ground_truth` | `nav_msgs/msg/Odometry` | `vehicle_model` | lidar/can/bridge | vehicle `dt`，默认 50 Hz；depth 50 |
-| `/hesai/pandar` | `sensor_msgs/msg/PointCloud2` | `lidar_simulator` | lidar_detection、NDT、map_saver、KISS-ICP | 默认 10 Hz；发布 depth 10；检测/NDT/map_saver 用 SensorDataQoS |
+| `/hesai/pandar` | `sensor_msgs/msg/PointCloud2` | `lidar_simulator` | lidar_detection、NDT、map_saver、KISS-ICP、simulation_bridge | 默认 10 Hz；发布 depth 10；检测/NDT/map_saver 用 SensorDataQoS；其 `header.stamp` 是仿真端到端延迟的起点 |
 | `/sim/lidar/visible_cones` | `visualization_msgs/msg/MarkerArray` | `lidar_simulator` | RViz | 随扫描；depth 10；`lidar` frame；marker stamp=0（最新 TF） |
 | `/sim/lidar/track_cones` | `visualization_msgs/msg/MarkerArray` | `lidar_simulator` | RViz | 启动时一次；Reliable + Transient Local；`map` frame |
 | `/localization/velocity` | `geometry_msgs/msg/TwistStamped` | `can_simulator` | controller | 随 ground truth；depth 50 |
@@ -28,13 +28,15 @@
 | `/planning/final_waypoints` | `autoware_msgs/msg/Lane` | path_generator | controller | 中心线或任务状态触发；depth 10 |
 | `/planning/final_waypoints_viz` | `visualization_msgs/msg/MarkerArray` | path_generator | RViz | 最终参考路径 `LINE_STRIP`；任务路径发布时；depth 10 |
 | `/planning/driven_trajectory_viz` | `visualization_msgs/msg/MarkerArray` | path_generator | RViz | `/localization/pose` 经仅可视化的一阶平滑和空间降采样后累积；每 3 个位置点更新；depth 10 |
-| `/control/command` | `autoware_msgs/msg/Command` | controller | vehicle_model | 控制定时器，默认 50 Hz；depth 10 |
+| `/control/command` | `autoware_msgs/msg/Command` | controller | vehicle_model、simulation_bridge | 控制定时器，默认 50 Hz；depth 10；`header.stamp` 在控制器发布前写入，是仿真端到端延迟的终点 |
 | `/system/mission_complete` | `std_msgs/msg/Bool` | controller | mission_manager | Skidpad 在固定 25 m 出口或 Acceleration 在终点线后 100 m 停止区末端停车后一次发布 `true`；mission_manager 据此进入 FINISH；depth 10 |
 | `/control/target_viz` | `visualization_msgs/msg/MarkerArray` | controller | RViz | 有订阅者时；depth 10 |
 | `/system/mission_state` | `wuta_msgs/msg/MissionState` | mission_manager | 规划/控制/定位/NDT/map_saver、simulation_bridge | **唯一发布者**；10 Hz；depth 10 |
 | `/system/start_command` | `std_msgs/msg/Bool` | simulation_bridge（`auto_start=true`）或外部 | mission_manager | 仿真出发输入；`true` 使 READY 进入 EXPLORE；depth 10 |
 | `/clicked_point` | `geometry_msgs/msg/PointStamped` | RViz Publish Point | simulation_bridge | `manual_ready=true` 时，一次点击锁存人工就绪并使 bridge 发布 ready；depth 10 |
-| `/system/status_viz` | `visualization_msgs/msg/MarkerArray` | simulation_bridge | RViz | 10 Hz；订阅 MissionState 后显示任务模式、状态、完成标志、车辆真值速度与位置；depth 10 |
+| `/system/lap_time` | `std_msgs/msg/Float64` | simulation_bridge | RViz/记录工具 | 每次真值车辆从赛项起点线同向跨越终点线时发布；单位 s；Trackdrive/Skidpad 的起终线重合，下一次跨线完成单圈 |
+| `/system/simulator_latency` | `std_msgs/msg/Float64` | simulation_bridge | RViz/记录工具 | 每个控制命令发布；单位 s；`/control/command.header.stamp - 最新 /hesai/pandar.header.stamp` |
+| `/system/status_viz` | `visualization_msgs/msg/MarkerArray` | simulation_bridge | RViz | 10 Hz；显示任务模式、状态、真值速度/位置、最近单圈用时与 LiDAR→命令延迟；depth 10 |
 | `/system/lidar_ready` | `std_msgs/msg/Bool` | simulation_bridge | mission_manager | 10 Hz；depth 10 |
 | `/system/localization_ready` | `std_msgs/msg/Bool` | localization_manager（默认）或 simulation_bridge（真值回退） | mission_manager | 随定位输出；depth 10 |
 | `/odometry/filtered` | `nav_msgs/msg/Odometry` | robot_localization `ekf_node` | localization_manager | 默认融合输出；50 Hz；`odom` frame |
@@ -78,6 +80,7 @@ autoware_msgs/msg/Lane
   Waypoint[] waypoints  # PoseStamped pose + TwistStamped twist
 
 autoware_msgs/msg/Command
+  std_msgs/Header header  # controller writes publish timestamp; frame_id=base_link
   float64 speed
   float64 angle
   int32 dv_state
@@ -136,7 +139,7 @@ KISS-ICP 的 `lidar_odom_frame=odom`、`base_frame=base_link`，且
 | --- | --- | --- |
 | vehicle_model | `wheel_base`、`max_steer_angle`、`dt`、`start_x/y/yaw`（double） | `vehicle_model.py` / launch |
 | lidar_simulator | topic/frame 名（string）、`publish_rate_hz`/FOV/范围/噪声（double）、点数（int）、开关（bool） | `config/lidar_simulator.yaml` |
-| simulation_bridge | `ground_truth_topic`、`map_frame`、`base_frame`（string）；`publish_start_command`、`publish_truth_localization`、`manual_ready`（bool） | `simulation_bridge.py`；只提供仿真就绪、出发输入、真值定位调试和状态可视化，不发布 MissionState |
+| simulation_bridge | `ground_truth_topic`、`map_frame`、`base_frame`（string）；`publish_start_command`、`publish_truth_localization`、`manual_ready`（bool）；`timing_min_lap_duration`（double） | `simulation_bridge.py`；根据 `/system/mission_state` 的赛项提供仿真就绪、出发输入、真值计时、LiDAR→命令延迟、真值定位调试和状态可视化，不发布 MissionState |
 | lidar_detection_node | `detector_type`、topic 名、地面/体素/聚类/几何阈值、`model_path` | `config/lidar_detection.yaml` |
 | cone_map_builder | `merge_distance`、`min_hit_count`、闭环阈值、`assign_colors`、`map_save_path`、`tf_lookup_timeout_sec`、`pending_detection_timeout_sec`、`max_pending_detections`、`use_latest_tf_fallback` | `config/cone_map_builder.yaml`；默认只使用检测采样时刻 TF，缺失时排队重试 |
 | boundary_detector_node | `lookahead_distance`、`desired_velocity` | `config/boundary_detector.yaml` |
