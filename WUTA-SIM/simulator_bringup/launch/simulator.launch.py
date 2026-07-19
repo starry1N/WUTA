@@ -128,6 +128,7 @@ def generate_launch_description():
                 "manual_ready": ParameterValue(
                     LaunchConfiguration("manual_ready"), value_type=bool
                 ),
+                "mission_mode_cmd": LaunchConfiguration("mission_mode"),
             }
         ],
     )

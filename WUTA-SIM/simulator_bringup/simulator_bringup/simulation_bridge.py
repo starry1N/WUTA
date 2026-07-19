@@ -8,7 +8,7 @@ from geometry_msgs.msg import PointStamped, PoseStamped, TransformStamped
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from sensor_msgs.msg import PointCloud2
-from std_msgs.msg import Bool, Float64
+from std_msgs.msg import Bool, Float64, String
 from tf2_ros import TransformBroadcaster
 from visualization_msgs.msg import Marker, MarkerArray
 from wuta_msgs.msg import MissionState
@@ -27,6 +27,7 @@ class SimulationBridge(Node):
         self.declare_parameter("map_frame", "map")
         self.declare_parameter("base_frame", "base_link")
         self.declare_parameter("timing_min_lap_duration", 1.0)
+        self.declare_parameter("mission_mode_cmd", "trackdrive")
 
         ground_truth_topic = str(
             self.get_parameter("ground_truth_topic").value
@@ -45,6 +46,9 @@ class SimulationBridge(Node):
         self.timing_min_lap_duration = float(
             self.get_parameter("timing_min_lap_duration").value
         )
+        self.mission_mode_cmd = str(
+            self.get_parameter("mission_mode_cmd").value
+        )
 
         self.pose_pub = self.create_publisher(
             PoseStamped, "/localization/pose", 10
@@ -57,6 +61,15 @@ class SimulationBridge(Node):
         )
         self.start_command_pub = self.create_publisher(
             Bool, "/system/start_command", 10
+        )
+        self.mission_mode_cmd_pub = self.create_publisher(
+            String, "/system/mission_mode_cmd", 10
+        )
+        self.emergency_pub = self.create_publisher(
+            Bool, "/system/emergency", 10
+        )
+        self.inspection_trigger_pub = self.create_publisher(
+            Bool, "/system/inspection_trigger", 10
         )
         self.system_status_viz_pub = self.create_publisher(
             MarkerArray, "/system/status_viz", 10
@@ -295,6 +308,18 @@ class SimulationBridge(Node):
             start = Bool()
             start.data = True
             self.start_command_pub.publish(start)
+
+        mode_cmd = String()
+        mode_cmd.data = self.mission_mode_cmd
+        self.mission_mode_cmd_pub.publish(mode_cmd)
+
+        emergency = Bool()
+        emergency.data = False
+        self.emergency_pub.publish(emergency)
+
+        inspection_trigger = Bool()
+        inspection_trigger.data = False
+        self.inspection_trigger_pub.publish(inspection_trigger)
 
         self._publish_status_visualization()
 
