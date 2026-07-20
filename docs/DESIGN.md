@@ -74,11 +74,17 @@ TF 假设。
 `/localization/pose` 做一阶平滑与最小空间间隔采样；它不回写 EKF、不改变建图，也不改变控制输入。
 因此 Ground Truth 用于判断仿真车辆真实运动，Driven Trajectory 用于观察实车可获得的定位轨迹。
 
-`simulation_bridge` 不拥有任务状态：它发布就绪与可选真值定位，并订阅唯一的
-`/system/mission_state` 生成 `/system/status_viz` 文字 marker。`mission_manager` 在两项
+`simulation_bridge` 不拥有任务状态：它发布就绪、可选真值定位，并在仿真中作为临时 VCU 输入源
+周期发布 `/system/mission_mode_cmd`、`/system/start_command`、`/system/emergency=false` 与
+`/system/inspection_trigger=false`；它订阅唯一的 `/system/mission_state` 生成
+`/system/status_viz` 文字 marker。`mission_manager` 在两项
 ready 后进入 READY，收到 `/system/start_command` 后进入 EXPLORE，收到控制器的
 `/system/mission_complete` 后进入 FINISH。`manual_ready:=true` 时，bridge 以 RViz
 `/clicked_point` 锁存人工 ready，供调试状态机。
+
+FSD 的 `ros2_ws/src/system/can_interface/` 是实车 CAN/VCU 适配预留源码：其接口约定为 CAN
+输入发布任务控制与车速、订阅任务状态/车检结果回传 CAN。该目录当前缺少 ROS package 构建文件，
+默认 bringup 不编译、不启动；文档中的实车 CAN 输入均为待实现，不可当作已有硬件能力。
 
 ### 2.6 仿真赛项指标
 

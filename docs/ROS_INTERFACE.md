@@ -32,7 +32,7 @@
 | `/system/mission_complete` | `std_msgs/msg/Bool` | controller | mission_manager | Skidpad 在固定 25 m 出口或 Acceleration 在终点线后 100 m 停止区末端停车后一次发布 `true`；mission_manager 据此进入 FINISH；depth 10 |
 | `/control/target_viz` | `visualization_msgs/msg/MarkerArray` | controller | RViz | 有订阅者时；depth 10 |
 | `/system/mission_state` | `wuta_msgs/msg/MissionState` | mission_manager | 规划/控制/定位/NDT/map_saver、simulation_bridge | **唯一发布者**；10 Hz；depth 10 |
-| `/system/start_command` | `std_msgs/msg/Bool` | simulation_bridge（`auto_start=true`）或外部 | mission_manager | 仿真出发输入；`true` 使 READY 进入 EXPLORE；depth 10 |
+| `/system/start_command` | `std_msgs/msg/Bool` | simulation_bridge（`auto_start=true`）或外部；实车 CAN 接口待实现 | mission_manager | 仿真出发输入；`true` 使 READY 进入 EXPLORE；depth 10 |
 | `/clicked_point` | `geometry_msgs/msg/PointStamped` | RViz Publish Point | simulation_bridge | `manual_ready=true` 时，一次点击锁存人工就绪并使 bridge 发布 ready；depth 10 |
 | `/system/lap_time` | `std_msgs/msg/Float64` | simulation_bridge | RViz/记录工具 | 每次真值车辆从赛项起点线同向跨越终点线时发布；单位 s；Trackdrive/Skidpad 的起终线重合，下一次跨线完成单圈 |
 | `/system/simulator_latency` | `std_msgs/msg/Float64` | simulation_bridge | RViz/记录工具 | 每个控制命令发布；单位 s；`/control/command.header.stamp - 最新 /hesai/pandar.header.stamp` |
@@ -46,9 +46,9 @@
 | `/ndt/aligned_cloud` | `sensor_msgs/msg/PointCloud2` | ndt_localization | 工具/RViz | 有订阅者时；depth 10 |
 | `/ndt/map_ready` | `std_msgs/msg/Bool` | map_saver | 外部编排 | 保存成功时；depth 10 |
 | `/initialpose` | `geometry_msgs/msg/PoseWithCovarianceStamped` | 外部（RViz/定位工具） | ndt_localization | depth 10 |
-| `/system/emergency` | `std_msgs/msg/Bool` | 外部 | mission_manager | depth 10 |
-| `/system/mission_mode_cmd` | `std_msgs/msg/String` | 外部 | mission_manager | depth 10 |
-| `/system/inspection_trigger` | `std_msgs/msg/Bool` | 外部 | mission_manager | depth 10 |
+| `/system/emergency` | `std_msgs/msg/Bool` | simulation_bridge（仿真固定 `false`）或外部；实车 CAN 接口待实现 | mission_manager | depth 10 |
+| `/system/mission_mode_cmd` | `std_msgs/msg/String` | simulation_bridge（由 launch 的 `mission_mode` 映射）或外部；实车 CAN 接口待实现 | mission_manager | `trackdrive`/`skidpad`/`acceleration`；depth 10 |
+| `/system/inspection_trigger` | `std_msgs/msg/Bool` | simulation_bridge（仿真固定 `false`）或外部；实车 CAN 接口待实现 | mission_manager | depth 10 |
 | `/system/inspection_result` | `std_msgs/msg/String` | mission_manager | 外部 | 车检触发后；当前内容为未实现提示 |
 
 KISS-ICP 在 `publish_debug_clouds=true` 时还会发布相对名称 `kiss/frame`、
@@ -139,7 +139,7 @@ KISS-ICP 的 `lidar_odom_frame=odom`、`base_frame=base_link`，且
 | --- | --- | --- |
 | vehicle_model | `wheel_base`、`max_steer_angle`、`dt`、`start_x/y/yaw`（double） | `vehicle_model.py` / launch |
 | lidar_simulator | topic/frame 名（string）、`publish_rate_hz`/FOV/范围/噪声（double）、点数（int）、开关（bool） | `config/lidar_simulator.yaml` |
-| simulation_bridge | `ground_truth_topic`、`map_frame`、`base_frame`（string）；`publish_start_command`、`publish_truth_localization`、`manual_ready`（bool）；`timing_min_lap_duration`（double） | `simulation_bridge.py`；根据 `/system/mission_state` 的赛项提供仿真就绪、出发输入、真值计时、LiDAR→命令延迟、真值定位调试和状态可视化，不发布 MissionState |
+| simulation_bridge | `ground_truth_topic`、`map_frame`、`base_frame`、`mission_mode_cmd`（string）；`publish_start_command`、`publish_truth_localization`、`manual_ready`（bool）；`timing_min_lap_duration`（double） | `simulation_bridge.py`；根据 `/system/mission_state` 的赛项提供仿真就绪、模式/GO/急停/车检输入、真值计时、LiDAR→命令延迟、真值定位调试和状态可视化，不发布 MissionState |
 | lidar_detection_node | `detector_type`、topic 名、地面/体素/聚类/几何阈值、`model_path` | `config/lidar_detection.yaml` |
 | cone_map_builder | `merge_distance`、`min_hit_count`、闭环阈值、`assign_colors`、`map_save_path`、`tf_lookup_timeout_sec`、`pending_detection_timeout_sec`、`max_pending_detections`、`use_latest_tf_fallback` | `config/cone_map_builder.yaml`；默认只使用检测采样时刻 TF，缺失时排队重试 |
 | boundary_detector_node | `lookahead_distance`、`desired_velocity` | `config/boundary_detector.yaml` |

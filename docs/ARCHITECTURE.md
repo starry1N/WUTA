@@ -47,6 +47,7 @@ graph TD
   LD -->|/perception/lidar/cones| CMB
   CMB -->|/mapping/cone_map| BD
   SB -->|/system/lidar_ready, /system/start_command| MM[mission_manager_node]
+  SB -->|/system/mission_mode_cmd, /system/emergency, /system/inspection_trigger| MM
   LM -->|/system/localization_ready| MM
   MM -->|/system/mission_state| BD
   BD -->|/planning/centerline| PG[path_generator_node]
@@ -72,6 +73,7 @@ graph TD
 | --- | --- | --- | --- |
 | `vehicle_model` | `vehicle_model` | 是 | 自行车模型；`/control/command` → `/sim/ground_truth` |
 | `can_simulator` | `can_simulator` | 是 | 从仿真里程计复制速度；`/sim/ground_truth` → `/localization/velocity` |
+| `can_interface` | `can_interface`（FSD 源码预留目录） | 否，且当前不可编译 | 规划中的实车 VCU/CAN 适配；目标是 CAN → 任务控制/车速、MissionState/车检结果 → CAN；当前没有 `package.xml`/`CMakeLists.txt`，不能视作运行节点 |
 | `ins_simulator` | `ins_simulator` submodule | 是 | 真值加噪的 CG-410 适配；`/sim/ground_truth` → `/cg410/odometry` |
 | `lidar_simulator` | `lidar_sim` | 是 | YAML 赛道/车辆位姿生成点云与真值 marker；`/sim/ground_truth` → `/hesai/pandar`、`/sim/lidar/*` |
 | `simulation_bridge` | `simulator_bringup` | 是 | 就绪、仿真开始输入、真值单圈计时、LiDAR→命令延迟、真值调试 pose/TF 与状态可视化；不发布 MissionState |
@@ -90,6 +92,10 @@ graph TD
 `autoware_msgs`、`wuta_msgs` 和 `wuta_tools` 是接口/工具包，不提供节点。`camera_detection`、
 `detection_fusion` 和 `kiss_icp_wrapper` 具有 package 元数据，但当前
 源码树中没有由本项目 CMake/launch 暴露的可执行节点，故不列为运行节点。
+
+仿真中 `simulation_bridge` 充当临时 VCU 输入源：它周期发布 mission mode、GO/start、
+`emergency=false` 与 `inspection_trigger=false` 给 `mission_manager`。实车应由 CAN 接口替换这组
+输入；`can_interface` 目前仅保留源码与配置草案，尚未进入编译或 launch。
 
 ## 4. Hardware / Simulation Architecture
 
