@@ -27,6 +27,7 @@ class SimulationBridge(Node):
         self.declare_parameter("map_frame", "map")
         self.declare_parameter("base_frame", "base_link")
         self.declare_parameter("timing_min_lap_duration", 1.0)
+        self.declare_parameter("trackdrive_finish_laps", 3)
         self.declare_parameter("mission_mode_cmd", "trackdrive")
 
         ground_truth_topic = str(
@@ -45,6 +46,9 @@ class SimulationBridge(Node):
         self.base_frame = str(self.get_parameter("base_frame").value)
         self.timing_min_lap_duration = float(
             self.get_parameter("timing_min_lap_duration").value
+        )
+        self.trackdrive_finish_laps = max(
+            1, int(self.get_parameter("trackdrive_finish_laps").value)
         )
         self.mission_mode_cmd = str(
             self.get_parameter("mission_mode_cmd").value
@@ -78,6 +82,9 @@ class SimulationBridge(Node):
         self.latency_pub = self.create_publisher(
             Float64, "/system/simulator_latency", 10
         )
+        self.mission_complete_pub = self.create_publisher(
+            Bool, "/system/mission_complete", 10
+        )
         self.tf_broadcaster = TransformBroadcaster(self)
 
         self.ground_truth_sub = self.create_subscription(
@@ -109,6 +116,8 @@ class SimulationBridge(Node):
         self.lap_started_at_s: Optional[float] = None
         self.last_timed_mode: Optional[int] = None
         self.timing_was_active = False
+        self.completed_laps = 0
+        self.trackdrive_mission_complete = False
 
         self.get_logger().info(
             "Simulation bridge waiting for ground truth on %s; truth localization=%s"
@@ -206,6 +215,8 @@ class SimulationBridge(Node):
         self.lap_started_at_s = None
         if clear_last:
             self.latest_lap_time_s = None
+            self.completed_laps = 0
+            self.trackdrive_mission_complete = False
 
     def _is_timing_active(self) -> bool:
         current = self.latest_mission_state
@@ -272,10 +283,36 @@ class SimulationBridge(Node):
         out = Float64()
         out.data = lap_time_s
         self.lap_time_pub.publish(out)
-        self.get_logger().info(
-            "Lap complete: %.3f s (start x=%.3f m, finish x=%.3f m)"
-            % (lap_time_s, start_x, finish_x)
-        )
+        is_trackdrive = current.mission_mode == MissionState.MISSION_TRACKDRIVE
+        if is_trackdrive:
+            self.completed_laps += 1
+        if is_trackdrive:
+            self.get_logger().info(
+                "Lap complete: %.3f s (start x=%.3f m, finish x=%.3f m, laps=%d/%d)"
+                % (
+                    lap_time_s,
+                    start_x,
+                    finish_x,
+                    self.completed_laps,
+                    self.trackdrive_finish_laps,
+                )
+            )
+        else:
+            self.get_logger().info(
+                "Lap complete: %.3f s (start x=%.3f m, finish x=%.3f m)"
+                % (lap_time_s, start_x, finish_x)
+            )
+        if (
+            is_trackdrive and self.completed_laps >= self.trackdrive_finish_laps
+        ):
+            self.trackdrive_mission_complete = True
+            complete = Bool()
+            complete.data = True
+            self.mission_complete_pub.publish(complete)
+            self.get_logger().info(
+                "Trackdrive complete after %d laps; publishing /system/mission_complete"
+                % self.completed_laps
+            )
         # Shared start/finish lines (trackdrive/skidpad) immediately start the
         # next lap. Acceleration uses different lines and remains disarmed.
         self.lap_started_at_s = stamp_s if start_x == finish_x else None
@@ -320,6 +357,11 @@ class SimulationBridge(Node):
         inspection_trigger = Bool()
         inspection_trigger.data = False
         self.inspection_trigger_pub.publish(inspection_trigger)
+
+        if self.trackdrive_mission_complete:
+            complete = Bool()
+            complete.data = True
+            self.mission_complete_pub.publish(complete)
 
         self._publish_status_visualization()
 
@@ -371,6 +413,11 @@ class SimulationBridge(Node):
             lines.append("Lap time: waiting for start/finish")
         else:
             lines.append("Last lap: %.3f s" % self.latest_lap_time_s)
+        if current is not None and current.mission_mode == MissionState.MISSION_TRACKDRIVE:
+            lines.append(
+                "Trackdrive laps: %d/%d"
+                % (self.completed_laps, self.trackdrive_finish_laps)
+            )
         if self.latest_latency_s is None:
             lines.append("LiDAR -> command: waiting")
         else:

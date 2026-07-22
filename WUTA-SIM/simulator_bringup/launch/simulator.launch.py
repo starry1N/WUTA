@@ -129,6 +129,10 @@ def generate_launch_description():
                     LaunchConfiguration("manual_ready"), value_type=bool
                 ),
                 "mission_mode_cmd": LaunchConfiguration("mission_mode"),
+                "trackdrive_finish_laps": ParameterValue(
+                    LaunchConfiguration("trackdrive_finish_laps"),
+                    value_type=int,
+                ),
             }
         ],
     )
@@ -308,6 +312,14 @@ def generate_launch_description():
                 "startup_delay",
                 default_value="0.5",
                 description="Seconds between dependency stages.",
+            ),
+            DeclareLaunchArgument(
+                "trackdrive_finish_laps",
+                default_value="3",
+                description=(
+                    "Number of completed start/finish crossings before "
+                    "Trackdrive publishes /system/mission_complete."
+                ),
             ),
             DeclareLaunchArgument(
                 "launch_ins",
