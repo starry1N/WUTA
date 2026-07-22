@@ -7,7 +7,7 @@ build:
   build_only: false
 
 launch_arguments:
-  track_file:  trackdrive1
+  track_file:  trackdrive
   mission_mode: trackdrive
   launch_fsd: true
   auto_start: true
