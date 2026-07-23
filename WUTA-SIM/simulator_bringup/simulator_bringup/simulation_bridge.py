@@ -118,6 +118,7 @@ class SimulationBridge(Node):
         self.timing_was_active = False
         self.completed_laps = 0
         self.trackdrive_mission_complete = False
+        self.shared_timing_line_armed = False
 
         self.get_logger().info(
             "Simulation bridge waiting for ground truth on %s; truth localization=%s"
@@ -213,6 +214,7 @@ class SimulationBridge(Node):
     def _reset_lap_timer(self, clear_last: bool = False) -> None:
         self.previous_ground_truth = None
         self.lap_started_at_s = None
+        self.shared_timing_line_armed = False
         if clear_last:
             self.latest_lap_time_s = None
             self.completed_laps = 0
@@ -226,14 +228,26 @@ class SimulationBridge(Node):
         )
 
     @staticmethod
-    def _crosses_positive_x_line(
-        previous: Odometry, current: Odometry, line_x: float, half_width: float
+    def _crosses_x_line(
+        previous: Odometry,
+        current: Odometry,
+        line_x: float,
+        half_width: float,
+        positive_only: bool = True,
     ) -> bool:
-        """True if the vehicle reference point crosses a finite line along +X."""
+        """True if the vehicle reference point crosses a finite x timing line."""
         previous_position = previous.pose.pose.position
         current_position = current.pose.pose.position
-        if not (previous_position.x <= line_x < current_position.x):
-            return False
+        if positive_only:
+            if not (previous_position.x <= line_x < current_position.x):
+                return False
+        else:
+            previous_side = previous_position.x - line_x
+            current_side = current_position.x - line_x
+            if previous_side == 0.0 and current_side == 0.0:
+                return False
+            if previous_side * current_side > 0.0:
+                return False
         # Linear interpolation gives the y coordinate at the physical line,
         # rather than accepting a sample that has already travelled past it.
         dx = current_position.x - previous_position.x
@@ -266,13 +280,36 @@ class SimulationBridge(Node):
         if stamp_s <= 0.0:
             return
 
+        shared_timing_line = abs(start_x - finish_x) < 1e-9
         if self.lap_started_at_s is None:
-            if self._crosses_positive_x_line(previous, msg, start_x, half_width):
+            if shared_timing_line:
+                self.lap_started_at_s = stamp_s
+                self.get_logger().info(
+                    "Lap timer armed at shared x=%.3f m line" % start_x
+                )
+            elif self._crosses_x_line(previous, msg, start_x, half_width):
                 self.lap_started_at_s = stamp_s
                 self.get_logger().info("Lap timer started at x=%.3f m" % start_x)
             return
 
-        if not self._crosses_positive_x_line(previous, msg, finish_x, half_width):
+        if shared_timing_line and not self.shared_timing_line_armed:
+            distance_from_line = abs(msg.pose.pose.position.x - finish_x)
+            if distance_from_line <= max(3.0, half_width * 2.0):
+                return
+            self.shared_timing_line_armed = True
+            self.get_logger().info(
+                "Shared timing line ready for next crossing at x=%.3f m"
+                % finish_x
+            )
+            return
+
+        if not self._crosses_x_line(
+            previous,
+            msg,
+            finish_x,
+            half_width,
+            positive_only=not shared_timing_line,
+        ):
             return
 
         lap_time_s = stamp_s - self.lap_started_at_s
@@ -315,7 +352,8 @@ class SimulationBridge(Node):
             )
         # Shared start/finish lines (trackdrive/skidpad) immediately start the
         # next lap. Acceleration uses different lines and remains disarmed.
-        self.lap_started_at_s = stamp_s if start_x == finish_x else None
+        self.lap_started_at_s = stamp_s if shared_timing_line else None
+        self.shared_timing_line_armed = False
 
     def _on_manual_ready(self, _msg: PointStamped) -> None:
         """Latch a manual-ready confirmation from RViz Publish Point."""
@@ -346,9 +384,14 @@ class SimulationBridge(Node):
             start.data = True
             self.start_command_pub.publish(start)
 
-        mode_cmd = String()
-        mode_cmd.data = self.mission_mode_cmd
-        self.mission_mode_cmd_pub.publish(mode_cmd)
+        if (
+            self.latest_mission_state is None
+            or self.latest_mission_state.state
+            in (MissionState.IDLE, MissionState.READY)
+        ):
+            mode_cmd = String()
+            mode_cmd.data = self.mission_mode_cmd
+            self.mission_mode_cmd_pub.publish(mode_cmd)
 
         emergency = Bool()
         emergency.data = False
