@@ -158,11 +158,17 @@ ros2 launch simulator_bringup simulator.launch.py startup_delay:=1.0
 ros2 launch simulator_bringup simulator.launch.py use_ground_truth_localization:=true
 ros2 launch simulator_bringup simulator.launch.py auto_start:=false
 ros2 launch simulator_bringup simulator.launch.py \
+  track_file:=trackdrive mission_mode:=trackdrive trackdrive_finish_laps:=3
+ros2 launch simulator_bringup simulator.launch.py \
   track_file:=/path/to/track.yaml start_x:=1.0 start_y:=2.0 start_yaw:=0.5
 ```
 
 `track_file` 和 `mission_mode` 应选择同一比赛项目。若赛道起点不是原点，还需传入
 一致的 `start_x`、`start_y` 和 `start_yaw`。
+
+Trackdrive 默认在完成 3 次起终线跨越后由 `simulation_bridge` 发布
+`/system/mission_complete=true`，随后 `mission_manager` 进入 `FINISH` 并停车。
+快速验收停车链路时可临时传入 `trackdrive_finish_laps:=1`。
 
 定位相关参数如下。`use_ground_truth_localization:=true` 是唯一推荐的“无需 INS/EKF”调试
 方式：启动文件会自动关闭 INS、KISS-ICP、EKF 与 localization_manager，并由 bridge 发布

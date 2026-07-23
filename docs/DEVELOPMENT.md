@@ -21,7 +21,7 @@ WUTA/
 
 ```bash
 source /opt/ros/humble/setup.bash
-cd /home/starry1n/WUTA
+cd /path/to/WUTA
 rosdep install --from-paths WUTA-FSD/ros2_ws/src WUTA-SIM --ignore-src -r -y
 ```
 
@@ -31,7 +31,7 @@ rosdep install --from-paths WUTA-FSD/ros2_ws/src WUTA-SIM --ignore-src -r -y
 
 ```bash
 source /opt/ros/humble/setup.bash
-cd /home/starry1n/WUTA/WUTA-FSD/ros2_ws
+cd /path/to/WUTA/WUTA-FSD/ros2_ws
 ./build_ws.sh
 source install/setup.bash
 
@@ -43,7 +43,7 @@ source install/setup.bash
 根目录脚本封装了此顺序：
 
 ```bash
-cd /home/starry1n/WUTA
+cd /path/to/WUTA
 ./start_simulator.sh --rviz
 ```
 
@@ -59,7 +59,7 @@ cd /home/starry1n/WUTA
 仓库使用 Git submodule 管理仿真组件。首次获取或切换到包含 INS 的主仓库提交后，先初始化：
 
 ```bash
-cd /home/starry1n/WUTA
+cd /path/to/WUTA
 git submodule update --init --recursive
 ```
 
