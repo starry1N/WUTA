@@ -43,6 +43,7 @@ graph TD
   LM -->|/localization/pose| PG[path_generator_node]
   LM -->|/localization/pose| CTRL[controller_node]
   LS -->|/sim/lidar/track_cones| RVIZ[RViz2]
+  TTM[track_truth_map_publisher] -->|/mapping/cone_map truth shortcut| BD
   LS -->|/sim/lidar/visible_cones| RVIZ
   LD -->|/perception/lidar/cones| CMB
   CMB -->|/mapping/cone_map| BD
@@ -76,6 +77,7 @@ graph TD
 | `can_interface` | `can_interface`（FSD 源码预留目录） | 否，且当前不可编译 | 规划中的实车 VCU/CAN 适配；目标是 CAN → 任务控制/车速、MissionState/车检结果 → CAN；当前没有 `package.xml`/`CMakeLists.txt`，不能视作运行节点 |
 | `ins_simulator` | `ins_simulator` submodule | 是 | 真值加噪的 CG-410 适配；`/sim/ground_truth` → `/cg410/odometry` |
 | `lidar_simulator` | `lidar_sim` | 是 | YAML 赛道/车辆位姿生成点云与真值 marker；`/sim/ground_truth` → `/hesai/pandar`、`/sim/lidar/*` |
+| `track_truth_map_publisher` | `simulator_bringup` | 仅 `use_track_truth_map=true` | 将与 Loaded Track Cones 相同 YAML 真值转换为 `/mapping/cone_map`，并发布 `/mapping/cone_map_viz`；替代检测与 cone_map_builder，仅用于规划/控制快捷验证 |
 | `simulation_bridge` | `simulator_bringup` | 是 | 就绪、仿真开始输入、真值单圈计时、LiDAR→命令延迟、真值调试 pose/TF 与状态可视化；不发布 MissionState |
 | `lidar_detection_node` | `lidar_detection` | 是（`launch_fsd`） | PCL/DL 检测；`/hesai/pandar` → `/perception/lidar/cones`、可视化 |
 | `cone_map_builder_node` | `cone_map_builder` | 是（`launch_fsd`） | TF 变换、去重/闭环；检测与 pose → `/mapping/cone_map` |

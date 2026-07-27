@@ -97,6 +97,9 @@ INS 包位于 `WUTA-SIM/wuta-ins-simulator`，并已是 `simulator_bringup` 的�
   `/tmp/wuta_*.yaml`/PCD 当作源码。
 - `/sim/lidar/track_cones` 是 YAML 真值，`/mapping/cone_map_viz` 是 FSD 估计地图。调试时
   必须标明二者，不能替换接线。
+- 仅验证 Trackdrive 的规划/控制时，可使用
+  `./start_simulator.sh use_track_truth_map:=true --rviz`。它从相同赛道 YAML 发布
+  `/mapping/cone_map`，并自动停用 LiDAR 检测与 cone_map_builder；不得用该模式评价感知、定位或建图。
 - INS 是 `WUTA-SIM/wuta-ins-simulator` submodule，默认与 KISS-ICP + EKF 一起启动；
   默认数据链为 `/sim/ground_truth -> /cg410/odometry -> ekf_node` 和
   `/hesai/pandar -> /kiss/odometry -> ekf_node -> /localization/pose`。需要真值回退时使用

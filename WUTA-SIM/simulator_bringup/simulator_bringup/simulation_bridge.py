@@ -309,9 +309,17 @@ class SimulationBridge(Node):
             start.data = True
             self.start_command_pub.publish(start)
 
-        mode_cmd = String()
-        mode_cmd.data = self.mission_mode_cmd
-        self.mission_mode_cmd_pub.publish(mode_cmd)
+        # The manager may start after the bridge, so keep publishing the mode
+        # command until it has entered a run state. Do not keep sending it in
+        # EXPLORE/MAPPING_DONE/RACE/FINISH, where it only creates warnings.
+        current = self.latest_mission_state
+        if current is None or current.state in (
+            MissionState.IDLE,
+            MissionState.READY,
+        ):
+            mode_cmd = String()
+            mode_cmd.data = self.mission_mode_cmd
+            self.mission_mode_cmd_pub.publish(mode_cmd)
 
         emergency = Bool()
         emergency.data = False
@@ -331,11 +339,19 @@ class SimulationBridge(Node):
             MissionState.MISSION_ACCELERATION: "ACCELERATION",
         }
         current = self.latest_mission_state
-        mission_state = (
-            "FINISH" if current is not None and current.state == MissionState.FINISH
-            else "EXPLORE" if current is not None and current.state == MissionState.EXPLORE
-            else "READY" if current is not None and current.state == MissionState.READY
-            else "IDLE"
+        state_names = {
+            MissionState.IDLE: "IDLE",
+            MissionState.READY: "READY",
+            MissionState.INSPECTION: "INSPECTION",
+            MissionState.EXPLORE: "EXPLORE",
+            MissionState.MAPPING_DONE: "MAPPING_DONE",
+            MissionState.RACE: "RACE",
+            MissionState.FINISH: "FINISH",
+            MissionState.EMERGENCY: "EMERGENCY",
+        }
+        mission_state = state_names.get(
+            current.state if current is not None else MissionState.IDLE,
+            "UNKNOWN",
         )
         mode_name = mode_names.get(
             current.mission_mode if current is not None else -1, "UNKNOWN"

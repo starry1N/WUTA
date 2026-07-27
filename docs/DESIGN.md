@@ -116,11 +116,12 @@ Topic 被用于连续流（点云、位姿、路径、命令和状态）；当�
 
 | 问题 | 选择 | 原因与替代方案 |
 | --- | --- | --- |
-| 真值赛道如何调试 | `/sim/lidar/track_cones` 静态、Transient Local marker | 与 `/mapping/cone_map_viz` 的估计地图隔离；替代方案是直接发布 ConeMap，但会把仿真真值伪装成 FSD 输出 |
+| 真值赛道如何调试 | 默认 `/sim/lidar/track_cones` 静态、Transient Local marker；可选 `use_track_truth_map` 转为 `ConeMap` 并渲染 `/mapping/cone_map_viz` | 快捷模式显式停用检测/建图，且从同一 ConeMap 生成蓝/黄/橙 MarkerArray，保证 RViz Cone Map 与算法输入一致；固定 `is_closed=false` 以保持 EXPLORE，仅用于规划/控制验证，不能伪装为感知结果 |
 | 坐标变换 | ConeMapBuilder 只按检测时间查询 TF，短暂缺失时排队重试 | 保持传感器时序，避免用车辆当前位姿转换历史点云造成系统性偏移 |
 | Trackdrive 路径 | Delaunay 中点路径 | 可由局部锥筒地图恢复赛道中心；Skidpad/Acceleration 用已知几何以避免不必要的锥筒依赖 |
 | Skidpad 交叉点跟踪 | Pure Pursuit 单调局部进度窗口 | 四圈与出口存在几何接近/重合点，按全部未来点搜索会直接跳至出口；每次只在有限连续窗口内推进可保证圈序 |
 | Skidpad 横向前视 | 固定 `skidpad_lookahead=3.0 m` | 通用 `v×2.0` 在 5 m/s 时为 10 m，接近圆半径并跨越交叉点的曲率突变；短前视保留当前圆的转向至实际切换点 |
+| Trackdrive 横向前视 | 固定 `trackdrive_lookahead=5.0 m` | 前视距离不再随 path_generator 的目标速度变化，便于稳定调参与比较规划路径对控制的影响；Acceleration 保持速度相关前视 |
 | 转向抖动抑制 | 连续 Pure Pursuit 曲率 + `max_steering_rate_deg_s` | 移除小横向误差的非连续放大；输出再按控制频率限转向速率，避免定位噪声直接成为执行器突变 |
 | Acceleration 停车 | 固定 map 路径 + 终点线后恒减速度 | 计时 75 m 内保持速度；停止区使用 `v²=2aΔx`，避免线性速度-距离剖面造成停止点前无限逼近 |
 | 仿真状态所有权 | mission_manager 唯一发布 MissionState | bridge 与状态机同时发布会产生竞争；bridge 只提供仿真 ready/start 输入与状态显示 |

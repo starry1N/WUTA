@@ -28,6 +28,7 @@ setup(
     entry_points={
         "console_scripts": [
             "simulation_bridge = simulator_bringup.simulation_bridge:main",
+            "track_truth_map_publisher = simulator_bringup.track_truth_map_publisher:main",
         ],
     },
 )

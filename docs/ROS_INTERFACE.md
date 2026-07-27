@@ -21,8 +21,8 @@
 | `/localization/pose` | `geometry_msgs/msg/PoseStamped` | `localization_manager`（默认）或 simulation_bridge（真值回退） | 建图/规划/控制 | 随 EKF 输出；depth 10 |
 | `/perception/lidar/cones` | `wuta_msgs/msg/ConeArray` | lidar_detection | cone_map_builder | 随点云；depth 10 |
 | `/perception/lidar/cones_viz` | `visualization_msgs/msg/MarkerArray` | lidar_detection | RViz | 有订阅者时；转换到 `map` 后发布；使用采样时间；depth 10 |
-| `/mapping/cone_map` | `wuta_msgs/msg/ConeMap` | cone_map_builder | boundary_detector、mission_manager | 5 Hz 定时器；depth 10 |
-| `/mapping/cone_map_viz` | `visualization_msgs/msg/MarkerArray` | cone_map_builder | RViz | 5 Hz；depth 10 |
+| `/mapping/cone_map` | `wuta_msgs/msg/ConeMap` | 默认 `cone_map_builder`；`use_track_truth_map=true` 时 `track_truth_map_publisher` | boundary_detector、mission_manager | 默认 5 Hz；真值快捷模式 2 Hz、Reliable + Transient Local；两种模式互斥 |
+| `/mapping/cone_map_viz` | `visualization_msgs/msg/MarkerArray` | 默认 cone_map_builder；`use_track_truth_map=true` 时 track_truth_map_publisher | RViz | 默认 5 Hz；真值快捷模式 2 Hz、Reliable + Transient Local；按算法输入渲染蓝/黄/橙锥桶 |
 | `/planning/centerline` | `autoware_msgs/msg/Lane` | boundary_detector | path_generator | 收到地图时；depth 10 |
 | `/planning/centerline_viz` | `visualization_msgs/msg/MarkerArray` | boundary_detector | RViz | 有订阅者时；depth 10 |
 | `/planning/final_waypoints` | `autoware_msgs/msg/Lane` | path_generator | controller | 中心线或任务状态触发；depth 10 |
@@ -140,6 +140,7 @@ KISS-ICP 的 `lidar_odom_frame=odom`、`base_frame=base_link`，且
 | vehicle_model | `wheel_base`、`max_steer_angle`、`dt`、`start_x/y/yaw`（double） | `vehicle_model.py` / launch |
 | lidar_simulator | topic/frame 名（string）、`publish_rate_hz`/FOV/范围/噪声（double）、点数（int）、开关（bool） | `config/lidar_simulator.yaml` |
 | simulation_bridge | `ground_truth_topic`、`map_frame`、`base_frame`、`mission_mode_cmd`（string）；`publish_start_command`、`publish_truth_localization`、`manual_ready`（bool）；`timing_min_lap_duration`（double） | `simulation_bridge.py`；根据 `/system/mission_state` 的赛项提供仿真就绪、模式/GO/急停/车检输入、真值计时、LiDAR→命令延迟、真值定位调试和状态可视化，不发布 MissionState |
+| track_truth_map_publisher | `track_file`、`map_topic`、`visualization_topic`、`map_frame`（string）；`publish_rate_hz`（double） | `track_truth_map_publisher.py`；仅真值快捷模式运行，将 Loaded Track Cones YAML 转为 FSD `ConeMap`，并发布相同输入的 MarkerArray，不参与感知/建图评估 |
 | lidar_detection_node | `detector_type`、topic 名、地面/体素/聚类/几何阈值、`model_path` | `config/lidar_detection.yaml` |
 | cone_map_builder | `merge_distance`、`min_hit_count`、闭环阈值、`assign_colors`、`map_save_path`、`tf_lookup_timeout_sec`、`pending_detection_timeout_sec`、`max_pending_detections`、`use_latest_tf_fallback` | `config/cone_map_builder.yaml`；默认只使用检测采样时刻 TF，缺失时排队重试 |
 | boundary_detector_node | `lookahead_distance`、`desired_velocity` | `config/boundary_detector.yaml` |

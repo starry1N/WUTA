@@ -30,6 +30,18 @@ def _delayed(period, *actions):
 def generate_launch_description():
     delay = LaunchConfiguration("startup_delay")
     launch_fsd = IfCondition(LaunchConfiguration("launch_fsd"))
+    fsd_with_perception = IfCondition(
+        PythonExpression([
+            "'", LaunchConfiguration("launch_fsd"), "' == 'true' and '",
+            LaunchConfiguration("use_track_truth_map"), "' == 'false'",
+        ])
+    )
+    fsd_with_truth_map = IfCondition(
+        PythonExpression([
+            "'", LaunchConfiguration("launch_fsd"), "' == 'true' and '",
+            LaunchConfiguration("use_track_truth_map"), "' == 'true'",
+        ])
+    )
 
     vehicle_share = FindPackageShare("vehicle_model")
     can_share = FindPackageShare("can_simulator")
@@ -181,7 +193,21 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration("launch_rviz")),
     )
 
-    # Stage 3: WUTA-FSD consumers, ordered by their topic data flow.
+    # Stage 3: WUTA-FSD consumers, ordered by their topic data flow. Truth-map
+    # mode replaces detection + map building, leaving one ConeMap publisher.
+    track_truth_map = Node(
+        package="simulator_bringup",
+        executable="track_truth_map_publisher",
+        name="track_truth_map_publisher",
+        parameters=[
+            {
+                "track_file": LaunchConfiguration("track_file"),
+                "map_topic": "/mapping/cone_map",
+            }
+        ],
+        output="screen",
+        condition=fsd_with_truth_map,
+    )
     lidar_detection = Node(
         package="lidar_detection",
         executable="lidar_detection_node",
@@ -196,7 +222,7 @@ def generate_launch_description():
             )
         ],
         output="screen",
-        condition=launch_fsd,
+        condition=fsd_with_perception,
     )
     cone_map_builder = Node(
         package="cone_map_builder",
@@ -212,7 +238,7 @@ def generate_launch_description():
             )
         ],
         output="screen",
-        condition=launch_fsd,
+        condition=fsd_with_perception,
     )
     boundary_detector = Node(
         package="boundary_detector",
@@ -286,6 +312,16 @@ def generate_launch_description():
                 default_value="true",
                 choices=["true", "false"],
                 description="Launch the WUTA-FSD perception-to-control chain.",
+            ),
+            DeclareLaunchArgument(
+                "use_track_truth_map",
+                default_value="false",
+                choices=["true", "false"],
+                description=(
+                    "Bypass lidar_detection and cone_map_builder; publish the "
+                    "Loaded Track Cones YAML truth directly as /mapping/cone_map "
+                    "for planning/control validation."
+                ),
             ),
             DeclareLaunchArgument(
                 "auto_start",
@@ -376,7 +412,7 @@ def generate_launch_description():
                 base_to_lidar,
             ),
             _delayed(PythonExpression([delay, " * 2"]), localization, rviz, mission_manager),
-            _delayed(PythonExpression([delay, " * 3"]), lidar_detection),
+            _delayed(PythonExpression([delay, " * 3"]), track_truth_map, lidar_detection),
             _delayed(PythonExpression([delay, " * 4"]), cone_map_builder),
             _delayed(PythonExpression([delay, " * 5"]), boundary_detector),
             _delayed(PythonExpression([delay, " * 6"]), path_generator),

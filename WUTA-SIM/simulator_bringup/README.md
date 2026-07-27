@@ -45,6 +45,24 @@ ros2 topic echo /system/lap_time
 ros2 topic echo /system/simulator_latency
 ```
 
+### Loaded Track Cones 真值快捷模式
+
+规划和控制调试可跳过 LiDAR 检测与 `cone_map_builder`，直接把与 RViz
+`/sim/lidar/track_cones` 相同 YAML 加载结果转换为 `/mapping/cone_map`：
+
+```bash
+./start_simulator.sh --rviz use_track_truth_map:=true
+```
+
+该模式启动 `track_truth_map_publisher`，并停用 `lidar_detection_node` 与
+`cone_map_builder_node`，确保 `/mapping/cone_map` 只有一个发布者；`boundary_detector`、
+`path_generator` 和 `controller` 仍照常启动。它仅用于隔离验证规划/控制，不能用于评估感知或建图。
+`track_truth_map_publisher` 同时将完全相同的算法输入地图渲染为
+`/mapping/cone_map_viz`（`MarkerArray`）；因此现有 RViz 的 **Cone Map** 项在此模式下
+仍会显示蓝、黄、橙锥桶。`/sim/lidar/track_cones` 本身仍是仅供 RViz 的 `MarkerArray`。
+真值 `ConeMap` 会固定 `is_closed=false`，避免当前尚未实现的 `MAPPING_DONE → RACE` 分支中断
+Trackdrive 的 `EXPLORE` 控制链。
+
 ### RViz 手动就绪调试
 
 需要手动控制状态机就绪时，以 `manual_ready:=true` 启动。bridge 会在 RViz 点击前保持
