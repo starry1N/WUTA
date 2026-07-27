@@ -8,6 +8,7 @@ import yaml
 from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from std_msgs.msg import UInt32
 from visualization_msgs.msg import Marker, MarkerArray
 from wuta_msgs.msg import Cone, ConeMap
 
@@ -35,6 +36,7 @@ class TrackTruthMapPublisher(Node):
         self.declare_parameter("map_topic", "/mapping/cone_map")
         self.declare_parameter("visualization_topic", "/mapping/cone_map_viz")
         self.declare_parameter("map_frame", "map")
+        self.declare_parameter("mapping_laps", 1)
         # Match cone_map_builder's 5 Hz map cadence so online boundary and
         # speed planning refresh at the same rate in truth-shortcut mode.
         self.declare_parameter("publish_rate_hz", 5.0)
@@ -43,6 +45,11 @@ class TrackTruthMapPublisher(Node):
             str(self.get_parameter("track_file").value)
         )
         self.map_frame = str(self.get_parameter("map_frame").value)
+        self.mapping_laps = max(
+            1, int(self.get_parameter("mapping_laps").value)
+        )
+        self.completed_laps = 0
+        self.closed_logged = False
         self.cone_map = self._load_cone_map(track_file)
 
         qos = QoSProfile(
@@ -57,6 +64,9 @@ class TrackTruthMapPublisher(Node):
             MarkerArray,
             str(self.get_parameter("visualization_topic").value),
             qos,
+        )
+        self.lap_count_subscription = self.create_subscription(
+            UInt32, "/system/lap_count", self._on_lap_count, qos
         )
         rate_hz = float(self.get_parameter("publish_rate_hz").value)
         if rate_hz <= 0.0:
@@ -123,13 +133,15 @@ class TrackTruthMapPublisher(Node):
             self._cone(entry, Cone.COLOR_UNKNOWN)
             for entry in track.get("unknown_cones", []) or []
         ]
-        # The shortcut is for active Trackdrive planning/control validation.
-        # Reporting a closed map would move mission_manager from EXPLORE to
-        # MAPPING_DONE, whose NDT-to-RACE transition is intentionally not
-        # implemented yet. This source is known static truth, not a completed
-        # SLAM map, so keep the mission in EXPLORE.
+        # Even though all simulated camera-equivalent colors are available,
+        # lap one remains EXPLORE. The publisher marks this cone map closed
+        # only after the formal localization-based lap counter completes the
+        # configured mapping lap.
         cone_map.is_closed = False
         return cone_map
+
+    def _on_lap_count(self, msg: UInt32) -> None:
+        self.completed_laps = int(msg.data)
 
     def _make_visualization(self, stamp: Any) -> MarkerArray:
         """Render the algorithm input map for the existing RViz Cone Map view."""
@@ -174,6 +186,13 @@ class TrackTruthMapPublisher(Node):
 
     def _publish(self) -> None:
         stamp = self.get_clock().now().to_msg()
+        self.cone_map.is_closed = self.completed_laps >= self.mapping_laps
+        if self.cone_map.is_closed and not self.closed_logged:
+            self.closed_logged = True
+            self.get_logger().info(
+                "Truth-color cone map closed after formal lap %d/%d"
+                % (self.completed_laps, self.mapping_laps)
+            )
         self.cone_map.header.stamp = stamp
         self.publisher.publish(self.cone_map)
         self.visualization_publisher.publish(self._make_visualization(stamp))

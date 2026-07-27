@@ -8,7 +8,7 @@ from geometry_msgs.msg import PointStamped, PoseStamped, TransformStamped
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from sensor_msgs.msg import PointCloud2
-from std_msgs.msg import Bool, Float64, String
+from std_msgs.msg import Bool, Float32, Float64, String, UInt32
 from tf2_ros import TransformBroadcaster
 from visualization_msgs.msg import Marker, MarkerArray
 from wuta_msgs.msg import MissionState
@@ -60,6 +60,9 @@ class SimulationBridge(Node):
         self.localization_ready_pub = self.create_publisher(
             Bool, "/system/localization_ready", 10
         )
+        self.localization_confidence_pub = self.create_publisher(
+            Float32, "/system/localization_confidence", 10
+        )
         self.lidar_ready_pub = self.create_publisher(
             Bool, "/system/lidar_ready", 10
         )
@@ -82,9 +85,6 @@ class SimulationBridge(Node):
         self.latency_pub = self.create_publisher(
             Float64, "/system/simulator_latency", 10
         )
-        self.mission_complete_pub = self.create_publisher(
-            Bool, "/system/mission_complete", 10
-        )
         self.tf_broadcaster = TransformBroadcaster(self)
 
         self.ground_truth_sub = self.create_subscription(
@@ -102,6 +102,9 @@ class SimulationBridge(Node):
         self.command_sub = self.create_subscription(
             Command, "/control/command", self._on_command, 10
         )
+        self.lap_count_sub = self.create_subscription(
+            UInt32, "/system/lap_count", self._on_lap_count, 10
+        )
         self.status_timer = self.create_timer(0.1, self._publish_status)
         self.received_ground_truth = False
         self.latest_mission_state: Optional[MissionState] = None
@@ -117,7 +120,7 @@ class SimulationBridge(Node):
         self.last_timed_mode: Optional[int] = None
         self.timing_was_active = False
         self.completed_laps = 0
-        self.trackdrive_mission_complete = False
+        self.formal_lap_count = 0
         self.shared_timing_line_armed = False
 
         self.get_logger().info(
@@ -154,6 +157,18 @@ class SimulationBridge(Node):
             self._reset_lap_timer(clear_last=True)
         self.latest_mission_state = msg
         self.last_timed_mode = msg.mission_mode
+
+    def _on_lap_count(self, msg: UInt32) -> None:
+        self.formal_lap_count = int(msg.data)
+        if (
+            self.completed_laps > 0
+            and abs(self.formal_lap_count - self.completed_laps) > 1
+        ):
+            self.get_logger().warn(
+                "Lap-count mismatch: localization=%d simulator_truth=%d"
+                % (self.formal_lap_count, self.completed_laps),
+                throttle_duration_sec=2.0,
+            )
 
     @staticmethod
     def _stamp_to_seconds(stamp) -> float:
@@ -218,12 +233,12 @@ class SimulationBridge(Node):
         if clear_last:
             self.latest_lap_time_s = None
             self.completed_laps = 0
-            self.trackdrive_mission_complete = False
 
     def _is_timing_active(self) -> bool:
         current = self.latest_mission_state
         return current is not None and current.state in (
             MissionState.EXPLORE,
+            MissionState.MAPPING_DONE,
             MissionState.RACE,
         )
 
@@ -339,17 +354,6 @@ class SimulationBridge(Node):
                 "Lap complete: %.3f s (start x=%.3f m, finish x=%.3f m)"
                 % (lap_time_s, start_x, finish_x)
             )
-        if (
-            is_trackdrive and self.completed_laps >= self.trackdrive_finish_laps
-        ):
-            self.trackdrive_mission_complete = True
-            complete = Bool()
-            complete.data = True
-            self.mission_complete_pub.publish(complete)
-            self.get_logger().info(
-                "Trackdrive complete after %d laps; publishing /system/mission_complete"
-                % self.completed_laps
-            )
         # Shared start/finish lines (trackdrive/skidpad) immediately start the
         # next lap. Acceleration uses different lines and remains disarmed.
         self.lap_started_at_s = stamp_s if shared_timing_line else None
@@ -378,6 +382,9 @@ class SimulationBridge(Node):
             localization_ready = Bool()
             localization_ready.data = ready
             self.localization_ready_pub.publish(localization_ready)
+            localization_confidence = Float32()
+            localization_confidence.data = 1.0 if ready else 0.0
+            self.localization_confidence_pub.publish(localization_confidence)
 
         if self.publish_start_command:
             start = Bool()
@@ -403,11 +410,6 @@ class SimulationBridge(Node):
         inspection_trigger = Bool()
         inspection_trigger.data = False
         self.inspection_trigger_pub.publish(inspection_trigger)
-
-        if self.trackdrive_mission_complete:
-            complete = Bool()
-            complete.data = True
-            self.mission_complete_pub.publish(complete)
 
         self._publish_status_visualization()
 
@@ -469,8 +471,12 @@ class SimulationBridge(Node):
             lines.append("Last lap: %.3f s" % self.latest_lap_time_s)
         if current is not None and current.mission_mode == MissionState.MISSION_TRACKDRIVE:
             lines.append(
-                "Trackdrive laps: %d/%d"
-                % (self.completed_laps, self.trackdrive_finish_laps)
+                "Trackdrive laps: localization %d/%d, truth %d"
+                % (
+                    self.formal_lap_count,
+                    self.trackdrive_finish_laps,
+                    self.completed_laps,
+                )
             )
         if self.latest_latency_s is None:
             lines.append("LiDAR -> command: waiting")

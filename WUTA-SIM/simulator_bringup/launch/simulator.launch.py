@@ -293,7 +293,20 @@ def generate_launch_description():
         executable="mission_manager_node",
         name="mission_manager_node",
         parameters=[
-            {"mission_mode": LaunchConfiguration("mission_mode")},
+            PathJoinSubstitution(
+                [
+                    FindPackageShare("mission_manager"),
+                    "config",
+                    "mission_manager.yaml",
+                ]
+            ),
+            {
+                "mission_mode": LaunchConfiguration("mission_mode"),
+                "trackdrive_finish_laps": ParameterValue(
+                    LaunchConfiguration("trackdrive_finish_laps"),
+                    value_type=int,
+                ),
+            },
         ],
         output="screen",
         condition=launch_fsd,
@@ -354,7 +367,7 @@ def generate_launch_description():
                 default_value="3",
                 description=(
                     "Number of completed start/finish crossings before "
-                    "Trackdrive publishes /system/mission_complete."
+                    "mission_manager enters FINISH."
                 ),
             ),
             DeclareLaunchArgument(
