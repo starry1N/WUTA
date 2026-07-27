@@ -7,11 +7,11 @@
 | 车辆仿真 | `VehicleModel`；`WUTA-SIM/vehicle_model/src/vehicle_model/vehicle_model/vehicle_model.py` | 订阅命令；按 `dt` 积分自行车模型并发布 Odometry |
 | LiDAR 仿真 | `LidarSimulatorNode`、`LidarSimulator`；`WUTA-SIM/perception_simulation/lidar_sim/` | 加载 YAML；启动时发布静态地图；定时生成 scan |
 | 仿真桥接 | `SimulationBridge`；`WUTA-SIM/simulator_bringup/simulator_bringup/simulation_bridge.py` | 发布就绪和仿真开始输入；以真值跨线计单圈、以 LiDAR/命令头时间戳计延迟；订阅 MissionState 做状态可视化；真值 pose/TF 仅作显式回退 |
-| 任务状态机 | `MissionManager`；`WUTA-FSD/ros2_ws/src/system/mission_manager/` | 唯一发布 MissionState；就绪后 READY，开始输入进入 EXPLORE，完成输入进入 FINISH |
+| 任务状态机 | `MissionManager`；`WUTA-FSD/ros2_ws/src/system/mission_manager/` | 唯一发布 MissionState；验证地图/定位/中心线门槛，按定位过线统计 Trackdrive 三圈 |
 | 感知 | `LidarDetectionNode` 与 `TraditionalDetector`；`WUTA-FSD/.../perception/lidar_detection/` | PointCloud2 转 PCL，检测后发布 ConeArray |
 | 锥筒地图 | `ConeMapBuilder`；`WUTA-FSD/.../mapping/cone_map_builder/` | 用 TF 变换检测，去重、颜色分配、闭环和定时发布 |
-| 边界/中心线 | `BoundaryDetectorNode` 与 `PathSearch`；`WUTA-FSD/.../planning/boundary_detector/` | 对局部锥筒执行 Delaunay/中点搜索 |
-| 路径 | `PathGeneratorNode`；`WUTA-FSD/.../planning/path_generator/` | Trackdrive 转发中心线；Skidpad 固定四圈、退出和停车路径；Acceleration 解析直线路径 |
+| 边界/中心线 | `BoundaryDetectorNode` 与 `PathSearch`；`WUTA-FSD/.../planning/boundary_detector/` | EXPLORE 局部搜索；闭环后从蓝黄锥地图生成、验收并冻结有序全局中心线 |
+| 路径 | `PathGeneratorNode`；`WUTA-FSD/.../planning/path_generator/` | Trackdrive 环线切片和分圈速度剖面；Skidpad 固定四圈、退出和停车路径；Acceleration 解析直线路径 |
 | 控制 | `ControllerNode`、`PurePursuit`、`TwistFilter`；`WUTA-FSD/.../control/controller/` | 定时计算目标点、转向与速度限幅 |
 | 定位 | `INSSimulator`、`kiss_icp_node`、`ekf_node`、`LocalizationManager`、`NdtLocalization` | 默认融合 INS 与 KISS-ICP；NDT 仅在 NDT 模式运行 |
 
@@ -44,13 +44,16 @@ FSD 建图链路。
 
 ### 2.3 规划与控制
 
-Trackdrive：`BoundaryDetectorNode` 提取 lookahead 范围内的蓝/黄/未知锥筒，构建 Delaunay
-图并搜索中点序列，输出 `Lane`。`PathGeneratorNode` 将 Trackdrive 局部中心线按
-`trackdrive_resample_spacing` 重采样，并按三点曲率计算
-`v=sqrt(trackdrive_lateral_accel_limit / |curvature|)`，再钳制到
-`trackdrive_min_velocity..trackdrive_velocity`。Skidpad 按 `skidpad_start_*` 固定 map 参考生成：右环顺时针
+Trackdrive：EXPLORE 时，`BoundaryDetectorNode` 提取 lookahead 范围内的蓝/黄/未知锥筒，
+构建 Delaunay 图并搜索局部中点序列。`ConeMap.is_closed=true` 后，它仅从闭环锥桶地图配对
+蓝黄边界、按车辆初始航向排序并验收覆盖率/闭合距离/段长，成功后冻结有方向的全局中心线；
+不读取赛道 YAML 的 reference centerline。`PathGeneratorNode` 从冻结环线按连续进度切取 40 m
+前向路径，按三点曲率计算 `v=sqrt(lateral_accel_limit / |curvature|)`。第一、二、三圈默认
+速度上限依次为 7、9、10 m/s，且取前向可见距离、路径置信度和定位置信度形成的更低安全上限。
+Skidpad 按 `skidpad_start_*` 固定 map 参考生成：右环顺时针
 两圈、左环逆时针两圈，再沿进入方向退出 25 m 并制动；不以实时定位位姿重建。Acceleration
-按赛道 map 参考穿过 75 m 终点线后在 100 m 停止区恒减速度制动。控制器只在 `EXPLORE` 或 `RACE` 启用：通常以速度
+按赛道 map 参考穿过 75 m 终点线后在 100 m 停止区恒减速度制动。控制器在 `EXPLORE`、
+`MAPPING_DONE` 或 `RACE` 启用，避免门槛验收期间停车：通常以速度
 比例的 lookahead 选择目标点，Pure Pursuit 计算命令，`TwistFilter` 再执行车辆约束/安全
 过滤。Trackdrive 使用固定 `trackdrive_lookahead=5.0 m`，并在短暂失去前向目标时以低速保留上一有效命令，
 超时后停车；Acceleration 保持动态前视。Skidpad 专用 `skidpad_lookahead=3.0 m` 覆盖通用动态前视（5 m/s 下原本为 10 m）：
@@ -81,9 +84,11 @@ TF 假设。
 `simulation_bridge` 不拥有任务状态：它发布就绪、可选真值定位，并在仿真中作为临时 VCU 输入源
 周期发布 `/system/mission_mode_cmd`、`/system/start_command`、`/system/emergency=false` 与
 `/system/inspection_trigger=false`；它订阅唯一的 `/system/mission_state` 生成
-`/system/status_viz` 文字 marker。`mission_manager` 在两项
-ready 后进入 READY，收到 `/system/start_command` 后进入 EXPLORE，收到控制器的
-`/system/mission_complete` 后进入 FINISH。`manual_ready:=true` 时，bridge 以 RViz
+`/system/status_viz` 文字 marker。`mission_manager` 在两项 ready 后进入 READY，收到
+`/system/start_command` 后进入 EXPLORE。Trackdrive 在地图闭合、地图质量、定位质量、冻结
+全局中心线及第一圈均通过后进入 RACE；它用 `/localization/pose` 建立有限起终线并发布
+`/system/lap_count`，第三圈后进入 FINISH。Skidpad/Acceleration 仍接收控制器的
+`/system/mission_complete`。`manual_ready:=true` 时，bridge 以 RViz
 `/clicked_point` 锁存人工 ready，供调试状态机。
 
 FSD 的 `ros2_ws/src/system/can_interface/` 是实车 CAN/VCU 适配预留源码：其接口约定为 CAN
@@ -94,10 +99,10 @@ FSD 的 `ros2_ws/src/system/can_interface/` 是实车 CAN/VCU 适配预留源码
 
 `SimulationBridge` 以 `/sim/ground_truth` 的 `Odometry.header.stamp` 和位置计算成绩，因此
 不受 INS/KISS-ICP/EKF 估计误差影响。Acceleration 从 `x=0` 起点线到 `x=75` 终点线；
-Skidpad 在 `x=0` 的同一条线完成每个圆；Trackdrive 使用两个橙色锥桶间的 `x=0` 起终线。
-仅在 `EXPLORE` 或 `RACE` 期间跨线有效，并检查横向线段范围和最短单圈时间。Trackdrive/Skidpad
-共用起终线：车辆先离开计时线区域，再允许任意方向回穿；Trackdrive 达到
-`trackdrive_finish_laps`（默认 3）后发布完成。
+Skidpad 在 `x=0` 的同一条线完成每个圆；Trackdrive 的正式圈次不使用仿真真值线，而由
+`mission_manager` 以首次有效定位位姿及航向建立有限起终线，检查离线距离、累计距离、用时、
+横向范围、穿越方向和航向。`SimulationBridge` 的真值过线只发布 `/system/lap_time` 并对照
+正式 `/system/lap_count`，不触发 Trackdrive 完成。
 
 控制器每次发布 `autoware_msgs/Command` 前填充 `header.stamp`。bridge 保存最新
 `/hesai/pandar.header.stamp`，在收到命令时发布两者之差到 `/system/simulator_latency`；这表示
@@ -122,13 +127,13 @@ Topic 被用于连续流（点云、位姿、路径、命令和状态）；当�
 
 | 问题 | 选择 | 原因与替代方案 |
 | --- | --- | --- |
-| 真值赛道如何调试 | 默认 `/sim/lidar/track_cones` 静态、Transient Local marker；可选 `use_track_truth_map` 转为 `ConeMap` 并渲染 `/mapping/cone_map_viz` | 快捷模式显式停用检测/建图，且从同一 ConeMap 生成蓝/黄/橙 MarkerArray，保证 RViz Cone Map 与算法输入一致；固定 `is_closed=false` 以保持 EXPLORE，仅用于规划/控制验证，不能伪装为感知结果 |
+| 真值赛道如何调试 | 默认 `/sim/lidar/track_cones` 静态、Transient Local marker；可选 `use_track_truth_map` 转为 `ConeMap` 并渲染 `/mapping/cone_map_viz` | 快捷模式模拟相机为地图锥桶提供正确颜色，首个正式圈后才置闭环；只提供锥桶坐标/颜色，不向规划提供 YAML 中心线，且不能用于评价感知/建图 |
 | 坐标变换 | ConeMapBuilder 只按检测时间查询 TF，短暂缺失时排队重试 | 保持传感器时序，避免用车辆当前位姿转换历史点云造成系统性偏移 |
-| Trackdrive 路径 | Delaunay 中点路径 | 可由局部锥筒地图恢复赛道中心；Skidpad/Acceleration 用已知几何以避免不必要的锥筒依赖 |
+| Trackdrive 路径 | EXPLORE 局部路径 + 闭环地图冻结全局中心线 | 第一圈在线建图，后两圈沿已验收的有序环线竞速；中心线始终由 ConeMap 推导 |
 | Skidpad 交叉点跟踪 | Pure Pursuit 单调局部进度窗口 | 四圈与出口存在几何接近/重合点，按全部未来点搜索会直接跳至出口；每次只在有限连续窗口内推进可保证圈序 |
 | Skidpad 横向前视 | 固定 `skidpad_lookahead=3.0 m` | 通用 `v×2.0` 在 5 m/s 时为 10 m，接近圆半径并跨越交叉点的曲率突变；短前视保留当前圆的转向至实际切换点 |
 | Trackdrive 横向前视 | 固定 `trackdrive_lookahead=5.0 m`，短暂目标丢失低速保持 | 前视距离不再随 path_generator 的目标速度变化；局部中心线短暂反向/缺失时最多保持 0.5 s、2 m/s，超时停车，避免掉头或指令突变 |
-| Trackdrive 纵向速度 | 重采样局部中心线后按曲率限制目标速度，并取前视点速度 | 在线路径刷新会令局部进度从车位起点重新计数；使用横向前视目标的速度而非起点恒定最高速度，保证曲率限速在入弯前传到控制器 |
+| Trackdrive 纵向速度 | 第一圈 7、第二圈 9、第三圈 10 m/s 上限，叠加曲率/可见距离/路径与定位置信度限速 | 第一圈保持已有速度；只有门槛通过才逐圈提速，质量下降时自动回到保守速度 |
 | 转向抖动抑制 | 连续 Pure Pursuit 曲率 + `max_steering_rate_deg_s` | 移除小横向误差的非连续放大；输出再按控制频率限转向速率，避免定位噪声直接成为执行器突变 |
 | Acceleration 停车 | 固定 map 路径 + 终点线后恒减速度 | 计时 75 m 内保持速度；停止区使用 `v²=2aΔx`，避免线性速度-距离剖面造成停止点前无限逼近 |
 | 仿真状态所有权 | mission_manager 唯一发布 MissionState | bridge 与状态机同时发布会产生竞争；bridge 只提供仿真 ready/start 输入与状态显示 |

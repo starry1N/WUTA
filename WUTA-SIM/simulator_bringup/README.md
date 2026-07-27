@@ -20,8 +20,9 @@ INS 将 ground truth 加噪后发布 `/cg410/odometry`，KISS-ICP 从 `/hesai/pa
 
 `simulation_bridge` 默认提供就绪状态以及（`auto_start:=true` 时）
 `/system/start_command=true` 仿真出发输入。`mission_manager` 是唯一的
-`/system/mission_state` 发布者：就绪后进入 `READY`，收到开始输入进入 `EXPLORE`，再由
-控制器的 `/system/mission_complete`（`std_msgs/msg/Bool=true`）进入 `FINISH`。
+`/system/mission_state` 发布者：就绪后进入 `READY`，收到开始输入进入 `EXPLORE`。
+Trackdrive 完成首圈建图并通过地图、定位和冻结中心线门槛后进入 `RACE`，第三圈后进入
+`FINISH`；Skidpad/Acceleration 仍由控制器的 `/system/mission_complete` 完成。
 默认的 `/localization/pose` 与动态 `odom -> base_link` TF 由融合定位链发布；bridge 的真值
 pose/TF 仅在 `use_ground_truth_localization:=true` 时启用。
 
@@ -32,7 +33,7 @@ LiDAR 到控制命令的延迟。该话题只用于调试显示，
 
 ### 单圈用时与仿真延迟
 
-`simulation_bridge` 只在 `EXPLORE/RACE` 中以 `/sim/ground_truth` 的真值位姿和时间戳计时：
+`simulation_bridge` 在 `EXPLORE/MAPPING_DONE/RACE` 中以 `/sim/ground_truth` 的真值位姿和时间戳计时：
 Acceleration 为 `x=0` 到 `x=75 m`，Skidpad 为 `x=0` 同向跨线的一圈，Trackdrive 为两个橙色锥桶
 定义的 `x=0` 起终线一圈。每次完成发布 `/system/lap_time`（`std_msgs/Float64`，秒）。
 
@@ -56,12 +57,14 @@ ros2 topic echo /system/simulator_latency
 
 该模式启动 `track_truth_map_publisher`，并停用 `lidar_detection_node` 与
 `cone_map_builder_node`，确保 `/mapping/cone_map` 只有一个发布者；`boundary_detector`、
-`path_generator` 和 `controller` 仍照常启动。它仅用于隔离验证规划/控制，不能用于评估感知或建图。
+`path_generator` 和 `controller` 仍照常启动。它把锥桶正确颜色直接赋给 ConeMap，模拟相机
+提供可靠颜色；仅用于隔离验证规划/控制，不能用于评估感知或建图。
 `track_truth_map_publisher` 同时将完全相同的算法输入地图渲染为
 `/mapping/cone_map_viz`（`MarkerArray`）；因此现有 RViz 的 **Cone Map** 项在此模式下
 仍会显示蓝、黄、橙锥桶。`/sim/lidar/track_cones` 本身仍是仅供 RViz 的 `MarkerArray`。
-真值 `ConeMap` 会固定 `is_closed=false`，避免当前尚未实现的 `MAPPING_DONE → RACE` 分支中断
-Trackdrive 的 `EXPLORE` 控制链。
+真值 `ConeMap` 第一圈保持 `is_closed=false`，收到正式 `/system/lap_count=1` 后置
+`is_closed=true`。它只提供锥桶坐标和颜色，不向规划发布 YAML 中心线；完整中心线仍由
+`boundary_detector` 从闭环 ConeMap 生成、排序、验收并冻结。
 
 ### RViz 手动就绪调试
 
@@ -184,9 +187,10 @@ ros2 launch simulator_bringup simulator.launch.py \
 `track_file` 和 `mission_mode` 应选择同一比赛项目。若赛道起点不是原点，还需传入
 一致的 `start_x`、`start_y` 和 `start_yaw`。
 
-Trackdrive 默认在完成 3 次起终线跨越后由 `simulation_bridge` 发布
-`/system/mission_complete=true`，随后 `mission_manager` 进入 `FINISH` 并停车。
-快速验收停车链路时可临时传入 `trackdrive_finish_laps:=1`。
+Trackdrive 正式圈次由 `mission_manager` 使用 `/localization/pose` 穿越有限起终线计算并发布
+`/system/lap_count`；默认第三圈进入 `FINISH` 并停车。`simulation_bridge` 的真值跨线只发布
+`/system/lap_time` 并核对正式圈次，不拥有完成权。`trackdrive_finish_laps` 会同时传给正式
+状态机与仿真对照计时器。
 
 定位相关参数如下。`use_ground_truth_localization:=true` 是唯一推荐的“无需 INS/EKF”调试
 方式：启动文件会自动关闭 INS、KISS-ICP、EKF 与 localization_manager，并由 bridge 发布

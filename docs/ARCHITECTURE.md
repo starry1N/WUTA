@@ -20,7 +20,7 @@ localization_manager 统一发布 `/localization/pose`。NDT 组件仍不在默�
 - 赛道 YAML 读取、可见性/遮挡/噪声建模与 `PointCloud2` 合成；
 - 传统 PCL 锥筒检测（DL 后端为接口占位）；
 - 锥筒去重、颜色启发式、闭环检测与 YAML 保存；
-- Trackdrive 的 Delaunay 中心线、重采样和曲率限速，以及 Skidpad/Acceleration 的解析路径；
+- Trackdrive 第一圈局部中心线、闭环地图生成的冻结全局中心线、分圈曲率限速，以及 Skidpad/Acceleration 的解析路径；
 - Pure Pursuit 命令与仿真车辆闭环；
 - RViz 真值、感知、地图、中心线和控制目标可视化。
 
@@ -50,8 +50,11 @@ graph TD
   SB -->|/system/lidar_ready, /system/start_command| MM[mission_manager_node]
   SB -->|/system/mission_mode_cmd, /system/emergency, /system/inspection_trigger| MM
   LM -->|/system/localization_ready| MM
+  LM -->|/system/localization_confidence, /localization/pose| MM
   MM -->|/system/mission_state| BD
   BD -->|/planning/centerline| PG[path_generator_node]
+  BD -->|/planning/global_centerline_ready, /planning/path_confidence| MM
+  MM -->|/system/lap_count| PG
   MM -->|/system/mission_state| PG
   PG -->|/planning/final_waypoints| CTRL[controller_node]
   CAN -->|/localization/velocity| CTRL
@@ -77,15 +80,15 @@ graph TD
 | `can_interface` | `can_interface`（FSD 源码预留目录） | 否，且当前不可编译 | 规划中的实车 VCU/CAN 适配；目标是 CAN → 任务控制/车速、MissionState/车检结果 → CAN；当前没有 `package.xml`/`CMakeLists.txt`，不能视作运行节点 |
 | `ins_simulator` | `ins_simulator` submodule | 是 | 真值加噪的 CG-410 适配；`/sim/ground_truth` → `/cg410/odometry` |
 | `lidar_simulator` | `lidar_sim` | 是 | YAML 赛道/车辆位姿生成点云与真值 marker；`/sim/ground_truth` → `/hesai/pandar`、`/sim/lidar/*` |
-| `track_truth_map_publisher` | `simulator_bringup` | 仅 `use_track_truth_map=true` | 将与 Loaded Track Cones 相同 YAML 真值转换为 `/mapping/cone_map`，并发布 `/mapping/cone_map_viz`；替代检测与 cone_map_builder，仅用于规划/控制快捷验证 |
-| `simulation_bridge` | `simulator_bringup` | 是 | 就绪、仿真开始输入、真值单圈计时、LiDAR→命令延迟、真值调试 pose/TF 与状态可视化；不发布 MissionState |
+| `track_truth_map_publisher` | `simulator_bringup` | 仅 `use_track_truth_map=true` | 将 YAML 锥桶坐标和正确颜色转换为 `/mapping/cone_map`，模拟相机提供可靠颜色；正式首圈完成后置 `is_closed=true`，但不发布 YAML 中心线 |
+| `simulation_bridge` | `simulator_bringup` | 是 | 就绪、仿真开始输入、真值单圈对照计时、LiDAR→命令延迟、真值调试 pose/TF 与状态可视化；不拥有 Trackdrive 圈次或 MissionState |
 | `lidar_detection_node` | `lidar_detection` | 是（`launch_fsd`） | PCL/DL 检测；`/hesai/pandar` → `/perception/lidar/cones`、可视化 |
 | `cone_map_builder_node` | `cone_map_builder` | 是（`launch_fsd`） | TF 变换、去重/闭环；检测与 pose → `/mapping/cone_map` |
-| `boundary_detector_node` | `boundary_detector` | 是（`launch_fsd`） | Delaunay 中点中心线；地图、位姿、任务 → `/planning/centerline` |
-| `path_generator_node` | `path_generator` | 是（`launch_fsd`） | 赛项路径与速度；Trackdrive 重采样后按曲率限速，Skidpad 固定四圈+25 m 退出路径 → `/planning/final_waypoints` |
+| `boundary_detector_node` | `boundary_detector` | 是（`launch_fsd`） | EXPLORE 局部中心线；闭环后从蓝黄锥配对、排序并冻结全局中心线，同时发布路径置信度 |
+| `path_generator_node` | `path_generator` | 是（`launch_fsd`） | Trackdrive 从冻结环线切取 40 m 前视段，按圈次、曲率、可见距离和置信度限速；Skidpad 固定四圈+25 m 退出路径 |
 | `controller_node` | `controller` | 是（`launch_fsd`） | 带单调路径进度的 Pure Pursuit 与限幅；Skidpad/Acceleration 停车后通知任务完成 |
-| `mission_manager_node` | `mission_manager` | 是（`launch_fsd`） | 唯一 MissionState 发布者；就绪、开始、完成、急停与地图 → `/system/mission_state` |
-| `localization_manager_node` | `localization_manager` | 是（`launch_localization`） | EKF/NDT 位姿源切换；状态/`/odometry/filtered`/`/ndt/pose` → `/localization/pose` |
+| `mission_manager_node` | `mission_manager` | 是（`launch_fsd`） | 唯一 MissionState 发布者；验证 RACE 门槛，用定位穿越有限起终线生成 `/system/lap_count`，第三圈后 FINISH |
+| `localization_manager_node` | `localization_manager` | 是（`launch_localization`） | EKF/NDT 位姿源切换；发布 `/localization/pose`、ready 与协方差派生的定位置信度 |
 | `kiss_icp_node` | KISS-ICP ROS package | 是（`launch_localization`） | 点云 → `/kiss/odometry`；TF 由 EKF 单独发布 |
 | `ndt_localization_node` | `ndt_localization` | 否 | PCL NDT 匹配；点云、初始位姿、状态 → `/ndt/pose`、路径 |
 | `map_saver_node` | `ndt_localization` | 否 | 探索阶段累积/下采样点云并保存 PCD；点云、KISS odom、状态 → `/ndt/map_ready` |

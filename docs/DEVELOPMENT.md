@@ -100,7 +100,9 @@ INS 包位于 `WUTA-SIM/wuta-ins-simulator`，并已是 `simulator_bringup` 的�
   不能将该快捷模式的结果当作感知或建图结果。
 - 仅验证 Trackdrive 的规划/控制时，可使用
   `./start_simulator.sh use_track_truth_map:=true --rviz`。它从相同赛道 YAML 发布
-  `/mapping/cone_map`，并自动停用 LiDAR 检测与 cone_map_builder；不得用该模式评价感知、定位或建图。
+  `/mapping/cone_map`，并自动停用 LiDAR 检测与 cone_map_builder。该模式只把锥桶坐标和正确颜色
+  作为模拟相机结果，首个正式圈后才闭环；规划仍必须从 ConeMap 生成中心线，不得读取 YAML
+  reference centerline，也不得用该模式评价感知、定位或建图。
 - RViz 默认关闭 `/hesai/pandar` 原始点云和 `/perception/lidar/cones_viz`
   未知色检测层。二者是白色调试层；检查颜色时优先看
   `/sim/lidar/track_cones` 与 `/mapping/cone_map_viz`。

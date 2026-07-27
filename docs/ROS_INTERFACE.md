@@ -23,8 +23,10 @@
 | `/perception/lidar/cones_viz` | `visualization_msgs/msg/MarkerArray` | lidar_detection | RViz | 有订阅者时；转换到 `map` 后发布；使用采样时间；depth 10 |
 | `/mapping/cone_map` | `wuta_msgs/msg/ConeMap` | 默认 `cone_map_builder`；`use_track_truth_map=true` 时 `track_truth_map_publisher` | boundary_detector、mission_manager | 5 Hz、Reliable + Transient Local；两种模式互斥 |
 | `/mapping/cone_map_viz` | `visualization_msgs/msg/MarkerArray` | 默认 cone_map_builder；`use_track_truth_map=true` 时 track_truth_map_publisher | RViz | 5 Hz；真值快捷模式为 Reliable + Transient Local；按算法输入渲染蓝/黄/橙锥桶 |
-| `/planning/centerline` | `autoware_msgs/msg/Lane` | boundary_detector | path_generator | 收到地图时；depth 10 |
+| `/planning/centerline` | `autoware_msgs/msg/Lane` | boundary_detector | path_generator | EXPLORE 为局部中心线；闭环验收后为冻结的有序全局中心线；depth 10 |
 | `/planning/centerline_viz` | `visualization_msgs/msg/MarkerArray` | boundary_detector | RViz | 有订阅者时；depth 10 |
+| `/planning/global_centerline_ready` | `std_msgs/msg/Bool` | boundary_detector | mission_manager、path_generator | 全局中心线验收结果；Reliable + Transient Local |
+| `/planning/path_confidence` | `std_msgs/msg/Float32` | boundary_detector | path_generator | 局部/全局路径置信度 `[0,1]`；Reliable + Transient Local |
 | `/planning/final_waypoints` | `autoware_msgs/msg/Lane` | path_generator | controller | 中心线或任务状态触发；depth 10 |
 | `/planning/final_waypoints_viz` | `visualization_msgs/msg/MarkerArray` | path_generator | RViz | 最终参考路径 `LINE_STRIP`；任务路径发布时；depth 10 |
 | `/planning/driven_trajectory_viz` | `visualization_msgs/msg/MarkerArray` | path_generator | RViz | `/localization/pose` 经仅可视化的一阶平滑和空间降采样后累积；每 3 个位置点更新；depth 10 |
@@ -32,19 +34,21 @@
 | `/system/mission_complete` | `std_msgs/msg/Bool` | controller | mission_manager | Skidpad 在固定 25 m 出口或 Acceleration 在终点线后 100 m 停止区末端停车后一次发布 `true`；mission_manager 据此进入 FINISH；depth 10 |
 | `/control/target_viz` | `visualization_msgs/msg/MarkerArray` | controller | RViz | 有订阅者时；depth 10 |
 | `/system/mission_state` | `wuta_msgs/msg/MissionState` | mission_manager | 规划/控制/定位/NDT/map_saver、simulation_bridge | **唯一发布者**；10 Hz；depth 10 |
+| `/system/lap_count` | `std_msgs/msg/UInt32` | mission_manager | path_generator、track_truth_map_publisher、simulation_bridge | 由定位位姿穿越正式起终线生成；Reliable + Transient Local；第三圈后 FINISH |
 | `/system/start_command` | `std_msgs/msg/Bool` | simulation_bridge（`auto_start=true`）或外部；实车 CAN 接口待实现 | mission_manager | 仿真出发输入；`true` 使 READY 进入 EXPLORE；depth 10 |
 | `/clicked_point` | `geometry_msgs/msg/PointStamped` | RViz Publish Point | simulation_bridge | `manual_ready=true` 时，一次点击锁存人工就绪并使 bridge 发布 ready；depth 10 |
-| `/system/lap_time` | `std_msgs/msg/Float64` | simulation_bridge | RViz/记录工具 | 每次真值车辆从赛项起点线同向跨越终点线时发布；单位 s；Trackdrive/Skidpad 的起终线重合，下一次跨线完成单圈 |
+| `/system/lap_time` | `std_msgs/msg/Float64` | simulation_bridge | RViz/记录工具 | 仿真真值跨线用时；仅用于成绩和正式圈次对照，不控制 Trackdrive 状态机 |
 | `/system/simulator_latency` | `std_msgs/msg/Float64` | simulation_bridge | RViz/记录工具 | 每个控制命令发布；单位 s；`/control/command.header.stamp - 最新 /hesai/pandar.header.stamp` |
 | `/system/status_viz` | `visualization_msgs/msg/MarkerArray` | simulation_bridge | RViz | 10 Hz；显示任务模式、状态、真值速度/位置、最近单圈用时与 LiDAR→命令延迟；depth 10 |
 | `/system/lidar_ready` | `std_msgs/msg/Bool` | simulation_bridge | mission_manager | 10 Hz；depth 10 |
 | `/system/localization_ready` | `std_msgs/msg/Bool` | localization_manager（默认）或 simulation_bridge（真值回退） | mission_manager | 随定位输出；depth 10 |
+| `/system/localization_confidence` | `std_msgs/msg/Float32` | localization_manager（默认）或 simulation_bridge（真值回退） | mission_manager、path_generator | 协方差派生或真值调试置信度 `[0,1]`；depth 10 |
 | `/odometry/filtered` | `nav_msgs/msg/Odometry` | robot_localization `ekf_node` | localization_manager | 默认融合输出；50 Hz；`odom` frame |
 | `/kiss/odometry` | `nav_msgs/msg/Odometry` | `kiss_icp_node` | `ekf_node`、map_saver | 默认约 10 Hz；`odom` frame；KISS 不发布 TF |
 | `/ndt/pose` | `geometry_msgs/msg/PoseStamped` | ndt_localization | localization_manager | NDT 激活时；depth 10 |
 | `/ndt/path` | `nav_msgs/msg/Path` | ndt_localization | 工具/RViz | NDT 激活时；depth 10 |
 | `/ndt/aligned_cloud` | `sensor_msgs/msg/PointCloud2` | ndt_localization | 工具/RViz | 有订阅者时；depth 10 |
-| `/ndt/map_ready` | `std_msgs/msg/Bool` | map_saver | mission_manager、外部编排 | 保存成功时发布 `true`；mission_manager 据此从 `MAPPING_DONE` 进入 `RACE`；depth 10 |
+| `/ndt/map_ready` | `std_msgs/msg/Bool` | map_saver | mission_manager、外部编排 | 保存成功时发布 `true`；仅当 `use_ndt_race_localization=true` 时作为 RACE 门槛；depth 10 |
 | `/initialpose` | `geometry_msgs/msg/PoseWithCovarianceStamped` | 外部（RViz/定位工具） | ndt_localization | depth 10 |
 | `/system/emergency` | `std_msgs/msg/Bool` | simulation_bridge（仿真固定 `false`）或外部；实车 CAN 接口待实现 | mission_manager | depth 10 |
 | `/system/mission_mode_cmd` | `std_msgs/msg/String` | simulation_bridge（由 launch 的 `mission_mode` 映射）或外部；实车 CAN 接口待实现 | mission_manager | `trackdrive`/`skidpad`/`acceleration`；depth 10 |
@@ -139,14 +143,14 @@ KISS-ICP 的 `lidar_odom_frame=odom`、`base_frame=base_link`，且
 | --- | --- | --- |
 | vehicle_model | `wheel_base`、`max_steer_angle`、`dt`、`start_x/y/yaw`（double） | `vehicle_model.py` / launch |
 | lidar_simulator | topic/frame 名（string）、`publish_rate_hz`/FOV/范围/噪声（double）、点数（int）、开关（bool） | `config/lidar_simulator.yaml` |
-| simulation_bridge | `ground_truth_topic`、`map_frame`、`base_frame`、`mission_mode_cmd`（string）；`publish_start_command`、`publish_truth_localization`、`manual_ready`（bool）；`timing_min_lap_duration`（double）、`trackdrive_finish_laps`（int） | `simulation_bridge.py`；根据 `/system/mission_state` 的赛项提供仿真就绪、模式/GO/急停/车检输入、真值计时、LiDAR→命令延迟、真值定位调试和状态可视化；Trackdrive 共线计时按离线后任意方向回穿计圈，到配置圈数发布完成 |
-| track_truth_map_publisher | `track_file`、`map_topic`、`visualization_topic`、`map_frame`（string）；`publish_rate_hz`（double） | `track_truth_map_publisher.py`；仅真值快捷模式运行，将 Loaded Track Cones YAML 转为 FSD `ConeMap`，并发布相同输入的 MarkerArray，不参与感知/建图评估 |
+| simulation_bridge | `ground_truth_topic`、`map_frame`、`base_frame`、`mission_mode_cmd`（string）；`publish_start_command`、`publish_truth_localization`、`manual_ready`（bool）；`timing_min_lap_duration`（double）、`trackdrive_finish_laps`（int） | 提供仿真就绪/GO/急停/车检输入、真值计时、延迟、真值定位调试和状态显示；订阅正式圈次用于对照，Trackdrive 完成权属于 mission_manager |
+| track_truth_map_publisher | `track_file`、`map_topic`、`visualization_topic`、`map_frame`（string）；`mapping_laps`（int）、`publish_rate_hz`（double） | 将 YAML 锥桶坐标/颜色转换为 ConeMap，模拟相机提供正确颜色；达到正式建图圈数后闭环，不发布 YAML 中心线 |
 | lidar_detection_node | `detector_type`、topic 名、地面/体素/聚类/几何阈值、`model_path` | `config/lidar_detection.yaml` |
 | cone_map_builder | `merge_distance`、`min_hit_count`、闭环阈值、`assign_colors`、`map_save_path`、`tf_lookup_timeout_sec`、`pending_detection_timeout_sec`、`max_pending_detections`、`use_latest_tf_fallback` | `config/cone_map_builder.yaml`；默认只使用检测采样时刻 TF，缺失时排队重试 |
-| boundary_detector_node | `lookahead_distance`、`desired_velocity`、`local_pairing_min_streak` | `config/boundary_detector.yaml`；Trackdrive 只根据 `/mapping/cone_map` 与 `/localization/pose` 在线生成局部中心线，赛道 YAML 仅由仿真器用于生成虚拟锥桶环境；局部几何配对仅在颜色配对连续不足后作为保守兜底 |
-| path_generator_node | `trackdrive_resample_spacing`、`trackdrive_velocity`、`trackdrive_min_velocity`、`trackdrive_lateral_accel_limit`、`trackdrive_min_forward_target`、`trackdrive_short_centerline_velocity`、`trackdrive_short_centerline_points`；Skidpad/Acceleration 速度、半径、点数、长度；Skidpad map 参考、出口和制动距离；Acceleration 起点/计时线/100 m 停止区；`driven_trajectory_smoothing_alpha`、`driven_trajectory_min_distance` | `config/path_generator.yaml`；Trackdrive 重采样后仅使用在线局部中心线曲率生成速度剖面，短中心线触发保守速度上限；后两项仅影响 RViz 实际轨迹显示 |
+| boundary_detector_node | 局部 lookahead/配对/Delaunay 参数；全局宽度、去重、最大段长/闭合距离、最小点数/覆盖率 | 只根据 ConeMap 与定位生成中心线；闭环后生成一次有序环线并冻结，发布 ready/置信度；不读取 YAML 中心线 |
+| path_generator_node | Trackdrive 第一圈/第二圈/第三圈速度、曲率、全局前视段、短路径、可见距离、置信度与定位超时参数；其他赛项参数 | 第一圈 7 m/s 上限，RACE 两圈 9/10 m/s；冻结环线切片后取曲率、可见距离、路径/定位置信度的最低速度上限 |
 | controller_node | 车辆几何、Pure Pursuit lookahead/连续进度窗口、`skidpad_lookahead=3.0 m`、`trackdrive_lookahead=5.0 m`、Trackdrive 目标丢失保持参数、`control_rate_hz`、`max_steering_rate_deg_s`、Skidpad 完成位置/速度阈值 | `config/controller.yaml`；Skidpad 和 Trackdrive 使用各自固定前视；Trackdrive 从前视点读取曲率速度，Skidpad/Acceleration 从单调路径进度读取速度；转向输出按速率限制抑制定位噪声引起的抖动 |
-| mission_manager | `mission_mode`（string） | `mission_manager.cpp`；唯一发布 MissionState，接收就绪、出发、完成和急停输入 |
+| mission_manager | 地图质量、定位质量/超时、正式圈数、起终线距离/用时/宽度/航向、`use_ndt_race_localization` | 唯一发布 MissionState 和正式圈次；五项门槛通过后 RACE，第三圈后 FINISH |
 | localization_manager | 无显式声明参数 | 默认定位集成；通过固定话题与 MissionState 选源 |
 | ndt_localization / map_saver | 地图路径、NDT/体素参数、累积距离 | `config/ndt_localization.yaml` |
 | kiss_icp_node | frame/TF、协方差、范围、体素、阈值、迭代参数 | `kiss_icp_wrapper/config/kiss_icp_hesai128.yaml` |

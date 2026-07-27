@@ -4,6 +4,24 @@
 环境：Ubuntu 22.04 / ROS 2 Humble / `<repo-root>`
 验证模式：`use_ground_truth_localization:=true`，先绕过 INS/KISS-ICP/EKF，只验证感知、建图、规划、控制闭环。赛道 YAML 仅用于 LiDAR 仿真生成锥桶真值和离线误差评估，不作为 Trackdrive 规划输入。
 
+## 2026-07-27 三圈竞速状态机验收
+
+本轮使用 `use_track_truth_map:=true` 模拟相机向 ConeMap 提供正确锥桶颜色；YAML 未向规划提供
+中心线。第一圈结束后 ConeMap 闭环，`boundary_detector` 从 191 对蓝黄锥生成并冻结 191 点
+全局中心线，置信度 0.973。地图闭合、地图质量、定位、全局中心线和首圈五项门槛全部通过后，
+状态按 `IDLE → READY → EXPLORE → MAPPING_DONE → RACE → FINISH` 运行。
+
+| 正式圈次 | 阶段 | 用时 | 距离 | 速度策略 |
+| ---: | --- | ---: | ---: | --- |
+| 1/3 | EXPLORE | 78.16 s | 464.4 m | 7 m/s 上限，曲率限速；实际大部分约 6 m/s |
+| 2/3 | RACE | 52.39 s | 464.4 m | 9 m/s 上限，曲率/置信度/前视距离联合限速 |
+| 3/3 | RACE | 46.99 s | 464.4 m | 10 m/s 上限，曲率/置信度/前视距离联合限速 |
+
+仿真真值计时连续报告 1/3、2/3、3/3，与正式定位圈次一致；`MAPPING_DONE` 未造成计时归零。
+冻结后的首个控制帧只接收 36 个局部前视点，没有将整圈 191 点直接送入控制器。第三圈后
+`MissionState.state=6`、`description=lap=3`，车辆真值线速度和角速度均为 0。完整日志保存为
+`run2-final.log`（验收机外部工件，不入库）。
+
 ## 验证命令
 
 构建受影响包（示例路径用 `<repo-root>` 表示仓库根目录）：
