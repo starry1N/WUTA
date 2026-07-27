@@ -14,7 +14,7 @@ package.xml 声明的依赖。NDT/KISS 路径还需要 PCD 地图、Eigen 与对
 
 ```bash
 source /opt/ros/humble/setup.bash
-cd /home/starry1n/WUTA
+cd /path/to/WUTA
 git submodule update --init --recursive
 ./start_simulator.sh --build-only
 ```
@@ -49,7 +49,7 @@ git submodule update --init --recursive
 完整仿真并打开项目 RViz：
 
 ```bash
-cd /home/starry1n/WUTA
+cd /path/to/WUTA
 ./start_simulator.sh --rviz
 ```
 

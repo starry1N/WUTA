@@ -44,7 +44,7 @@
 | `/ndt/pose` | `geometry_msgs/msg/PoseStamped` | ndt_localization | localization_manager | NDT 激活时；depth 10 |
 | `/ndt/path` | `nav_msgs/msg/Path` | ndt_localization | 工具/RViz | NDT 激活时；depth 10 |
 | `/ndt/aligned_cloud` | `sensor_msgs/msg/PointCloud2` | ndt_localization | 工具/RViz | 有订阅者时；depth 10 |
-| `/ndt/map_ready` | `std_msgs/msg/Bool` | map_saver | 外部编排 | 保存成功时；depth 10 |
+| `/ndt/map_ready` | `std_msgs/msg/Bool` | map_saver | mission_manager、外部编排 | 保存成功时发布 `true`；mission_manager 据此从 `MAPPING_DONE` 进入 `RACE`；depth 10 |
 | `/initialpose` | `geometry_msgs/msg/PoseWithCovarianceStamped` | 外部（RViz/定位工具） | ndt_localization | depth 10 |
 | `/system/emergency` | `std_msgs/msg/Bool` | simulation_bridge（仿真固定 `false`）或外部；实车 CAN 接口待实现 | mission_manager | depth 10 |
 | `/system/mission_mode_cmd` | `std_msgs/msg/String` | simulation_bridge（由 launch 的 `mission_mode` 映射）或外部；实车 CAN 接口待实现 | mission_manager | `trackdrive`/`skidpad`/`acceleration`；depth 10 |
@@ -143,8 +143,8 @@ KISS-ICP 的 `lidar_odom_frame=odom`、`base_frame=base_link`，且
 | track_truth_map_publisher | `track_file`、`map_topic`、`visualization_topic`、`map_frame`（string）；`publish_rate_hz`（double） | `track_truth_map_publisher.py`；仅真值快捷模式运行，将 Loaded Track Cones YAML 转为 FSD `ConeMap`，并发布相同输入的 MarkerArray，不参与感知/建图评估 |
 | lidar_detection_node | `detector_type`、topic 名、地面/体素/聚类/几何阈值、`model_path` | `config/lidar_detection.yaml` |
 | cone_map_builder | `merge_distance`、`min_hit_count`、闭环阈值、`assign_colors`、`map_save_path`、`tf_lookup_timeout_sec`、`pending_detection_timeout_sec`、`max_pending_detections`、`use_latest_tf_fallback` | `config/cone_map_builder.yaml`；默认只使用检测采样时刻 TF，缺失时排队重试 |
-| boundary_detector_node | `lookahead_distance`、`desired_velocity` | `config/boundary_detector.yaml` |
-| path_generator_node | Trackdrive/Skidpad/Acceleration 速度、半径、点数、长度；Skidpad map 参考、出口和制动距离；Acceleration 起点/计时线/100 m 停止区；`driven_trajectory_smoothing_alpha`、`driven_trajectory_min_distance` | `config/path_generator.yaml`；后两项仅影响 RViz 实际轨迹显示 |
+| boundary_detector_node | `lookahead_distance`、`desired_velocity`、`local_pairing_min_streak` | `config/boundary_detector.yaml`；Trackdrive 只根据 `/mapping/cone_map` 与 `/localization/pose` 在线生成局部中心线，赛道 YAML 仅由仿真器用于生成虚拟锥桶环境；局部几何配对仅在颜色配对连续不足后作为保守兜底 |
+| path_generator_node | Trackdrive 重采样/直道速度/最小速度/横向加速度限速；Skidpad/Acceleration 速度、半径、点数、长度；Skidpad map 参考、出口和制动距离；Acceleration 起点/计时线/100 m 停止区；`driven_trajectory_smoothing_alpha`、`driven_trajectory_min_distance` | `config/path_generator.yaml`；Trackdrive 速度剖面只使用在线局部中心线曲率；后两项仅影响 RViz 实际轨迹显示 |
 | controller_node | 车辆几何、Pure Pursuit lookahead/连续进度窗口、`skidpad_lookahead=3.0 m`、`control_rate_hz`、`max_steering_rate_deg_s`、Skidpad 完成位置/速度阈值 | `config/controller.yaml`；仅 `MISSION_SKIDPAD` 使用固定前视；转向输出按速率限制抑制定位噪声引起的抖动 |
 | mission_manager | `mission_mode`（string） | `mission_manager.cpp`；唯一发布 MissionState，接收就绪、出发、完成和急停输入 |
 | localization_manager | 无显式声明参数 | 默认定位集成；通过固定话题与 MissionState 选源 |

@@ -67,7 +67,7 @@ WUTA-FSD/ros2_ws/install/setup.bash
 默认配置：
 
 ```bash
-cd /home/starry1n/WUTA
+cd /path/to/WUTA
 ./start_simulator.sh --rviz
 ```
 
@@ -123,7 +123,7 @@ ros2 launch simulator_bringup simulator.launch.py \
 构建 `simulator_bringup` 后，可确认安装配置不含 RViz 默认占位话题：
 
 ```bash
-cd /home/starry1n/WUTA/WUTA-SIM
+cd /path/to/WUTA/WUTA-SIM
 colcon build --packages-select simulator_bringup --symlink-install
 rg 'visualization_marker_array' \
   install/simulator_bringup/share/simulator_bringup/rviz/wuta_simulator.rviz
