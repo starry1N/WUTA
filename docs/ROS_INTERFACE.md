@@ -21,8 +21,8 @@
 | `/localization/pose` | `geometry_msgs/msg/PoseStamped` | `localization_manager`（默认）或 simulation_bridge（真值回退） | 建图/规划/控制 | 随 EKF 输出；depth 10 |
 | `/perception/lidar/cones` | `wuta_msgs/msg/ConeArray` | lidar_detection | cone_map_builder | 随点云；depth 10 |
 | `/perception/lidar/cones_viz` | `visualization_msgs/msg/MarkerArray` | lidar_detection | RViz | 有订阅者时；转换到 `map` 后发布；使用采样时间；depth 10 |
-| `/mapping/cone_map` | `wuta_msgs/msg/ConeMap` | 默认 `cone_map_builder`；`use_track_truth_map=true` 时 `track_truth_map_publisher` | boundary_detector、mission_manager | 默认 5 Hz；真值快捷模式 2 Hz、Reliable + Transient Local；两种模式互斥 |
-| `/mapping/cone_map_viz` | `visualization_msgs/msg/MarkerArray` | 默认 cone_map_builder；`use_track_truth_map=true` 时 track_truth_map_publisher | RViz | 默认 5 Hz；真值快捷模式 2 Hz、Reliable + Transient Local；按算法输入渲染蓝/黄/橙锥桶 |
+| `/mapping/cone_map` | `wuta_msgs/msg/ConeMap` | 默认 `cone_map_builder`；`use_track_truth_map=true` 时 `track_truth_map_publisher` | boundary_detector、mission_manager | 5 Hz、Reliable + Transient Local；两种模式互斥 |
+| `/mapping/cone_map_viz` | `visualization_msgs/msg/MarkerArray` | 默认 cone_map_builder；`use_track_truth_map=true` 时 track_truth_map_publisher | RViz | 5 Hz；真值快捷模式为 Reliable + Transient Local；按算法输入渲染蓝/黄/橙锥桶 |
 | `/planning/centerline` | `autoware_msgs/msg/Lane` | boundary_detector | path_generator | 收到地图时；depth 10 |
 | `/planning/centerline_viz` | `visualization_msgs/msg/MarkerArray` | boundary_detector | RViz | 有订阅者时；depth 10 |
 | `/planning/final_waypoints` | `autoware_msgs/msg/Lane` | path_generator | controller | 中心线或任务状态触发；depth 10 |
@@ -144,8 +144,8 @@ KISS-ICP 的 `lidar_odom_frame=odom`、`base_frame=base_link`，且
 | lidar_detection_node | `detector_type`、topic 名、地面/体素/聚类/几何阈值、`model_path` | `config/lidar_detection.yaml` |
 | cone_map_builder | `merge_distance`、`min_hit_count`、闭环阈值、`assign_colors`、`map_save_path`、`tf_lookup_timeout_sec`、`pending_detection_timeout_sec`、`max_pending_detections`、`use_latest_tf_fallback` | `config/cone_map_builder.yaml`；默认只使用检测采样时刻 TF，缺失时排队重试 |
 | boundary_detector_node | `lookahead_distance`、`desired_velocity`、`local_pairing_min_streak` | `config/boundary_detector.yaml`；Trackdrive 只根据 `/mapping/cone_map` 与 `/localization/pose` 在线生成局部中心线，赛道 YAML 仅由仿真器用于生成虚拟锥桶环境；局部几何配对仅在颜色配对连续不足后作为保守兜底 |
-| path_generator_node | `trackdrive_resample_spacing`、`trackdrive_velocity`、`trackdrive_min_velocity`、`trackdrive_lateral_accel_limit`、`trackdrive_min_forward_target`；Skidpad/Acceleration 速度、半径、点数、长度；Skidpad map 参考、出口和制动距离；Acceleration 起点/计时线/100 m 停止区；`driven_trajectory_smoothing_alpha`、`driven_trajectory_min_distance` | `config/path_generator.yaml`；Trackdrive 重采样后仅使用在线局部中心线曲率生成速度剖面；后两项仅影响 RViz 实际轨迹显示 |
-| controller_node | 车辆几何、Pure Pursuit lookahead/连续进度窗口、`skidpad_lookahead=3.0 m`、`trackdrive_lookahead=5.0 m`、Trackdrive 目标丢失保持参数、`control_rate_hz`、`max_steering_rate_deg_s`、Skidpad 完成位置/速度阈值 | `config/controller.yaml`；Skidpad 和 Trackdrive 使用各自固定前视；转向输出按速率限制抑制定位噪声引起的抖动 |
+| path_generator_node | `trackdrive_resample_spacing`、`trackdrive_velocity`、`trackdrive_min_velocity`、`trackdrive_lateral_accel_limit`、`trackdrive_min_forward_target`、`trackdrive_short_centerline_velocity`、`trackdrive_short_centerline_points`；Skidpad/Acceleration 速度、半径、点数、长度；Skidpad map 参考、出口和制动距离；Acceleration 起点/计时线/100 m 停止区；`driven_trajectory_smoothing_alpha`、`driven_trajectory_min_distance` | `config/path_generator.yaml`；Trackdrive 重采样后仅使用在线局部中心线曲率生成速度剖面，短中心线触发保守速度上限；后两项仅影响 RViz 实际轨迹显示 |
+| controller_node | 车辆几何、Pure Pursuit lookahead/连续进度窗口、`skidpad_lookahead=3.0 m`、`trackdrive_lookahead=5.0 m`、Trackdrive 目标丢失保持参数、`control_rate_hz`、`max_steering_rate_deg_s`、Skidpad 完成位置/速度阈值 | `config/controller.yaml`；Skidpad 和 Trackdrive 使用各自固定前视；Trackdrive 从前视点读取曲率速度，Skidpad/Acceleration 从单调路径进度读取速度；转向输出按速率限制抑制定位噪声引起的抖动 |
 | mission_manager | `mission_mode`（string） | `mission_manager.cpp`；唯一发布 MissionState，接收就绪、出发、完成和急停输入 |
 | localization_manager | 无显式声明参数 | 默认定位集成；通过固定话题与 MissionState 选源 |
 | ndt_localization / map_saver | 地图路径、NDT/体素参数、累积距离 | `config/ndt_localization.yaml` |

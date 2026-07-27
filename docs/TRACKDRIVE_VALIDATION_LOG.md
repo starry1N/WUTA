@@ -79,7 +79,7 @@ cd <repo-root>
 | `boundary_detector.yaml` | `lookahead_distance` 提高到 30 m | 高速 7 m/s 下让局部地图覆盖控制器前视距离，避免每帧只剩很少路径点 |
 | `path_generator` | Trackdrive 中心线按 `trackdrive_resample_spacing=1.0 m` 重采样 | 稀疏中心线变成连续目标点，Pure Pursuit 不再只追末端点 |
 | `path_generator` | Trackdrive 按局部路径曲率限制 waypoint 速度，参数为 `trackdrive_min_velocity` 与 `trackdrive_lateral_accel_limit` | 弯道目标速度可低于直道目标速度，降低紧弯高速过冲风险；不使用赛道 YAML 真值 |
-| `controller` | Trackdrive 通用前视调为 `ld_ratio=1.2`、`max_lookahead=10.0 m` | 7 m/s 下前视约 8.4 m，减少局部路径过短时的切弯/跳点 |
+| `controller` | Trackdrive 固定 `trackdrive_lookahead=5.0 m`，并使用前视目标点的速度 | 局部中心线每次刷新都会从车辆起点重新计数；读取前视点速度可将曲率限速带入弯道，避免起点速度恒为 7 m/s |
 | `controller` | 只选择车体前方目标；无前方目标时停车 | 防止瞬时反向路径引导车辆掉头绕圈 |
 | `lidar_sim` | LiDAR FOV 调整为 360 deg | 更符合 Hesai 128 旋转激光雷达；侧后方锥桶可进入建图 |
 | `lidar_sim` | 关闭简化遮挡模型 `enable_occlusion=false` | 原遮挡模型会把同侧远处锥桶成片挡掉，导致直道前方地图不足；关闭后感知地图更稳定 |

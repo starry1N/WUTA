@@ -35,7 +35,9 @@ class TrackTruthMapPublisher(Node):
         self.declare_parameter("map_topic", "/mapping/cone_map")
         self.declare_parameter("visualization_topic", "/mapping/cone_map_viz")
         self.declare_parameter("map_frame", "map")
-        self.declare_parameter("publish_rate_hz", 2.0)
+        # Match cone_map_builder's 5 Hz map cadence so online boundary and
+        # speed planning refresh at the same rate in truth-shortcut mode.
+        self.declare_parameter("publish_rate_hz", 5.0)
 
         track_file = _resolve_track_file(
             str(self.get_parameter("track_file").value)
