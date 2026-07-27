@@ -95,8 +95,9 @@ INS 包位于 `WUTA-SIM/wuta-ins-simulator`，并已是 `simulator_bringup` 的�
   `WUTA-SIM/perception_simulation/tracks/`。当前标准文件为 `trackdrive.yaml`、`skidpad.yaml`
   与 `acceleration.yaml`；`trackdrive1.yaml` 已删除，新的默认/测试配置不得再引用它。不要把生成的
   `/tmp/wuta_*.yaml`/PCD 当作源码。
-- `/sim/lidar/track_cones` 是 YAML 真值，`/mapping/cone_map_viz` 是 FSD 估计地图。调试时
-  必须标明二者，不能替换接线。
+- 默认模式下，`/sim/lidar/track_cones` 是 YAML 真值，`/mapping/cone_map_viz` 是 FSD 估计地图。
+  `use_track_truth_map:=true` 时后者改由同一 YAML 转换的真值 `ConeMap` 渲染；调试记录必须标明当前模式，
+  不能将该快捷模式的结果当作感知或建图结果。
 - 仅验证 Trackdrive 的规划/控制时，可使用
   `./start_simulator.sh use_track_truth_map:=true --rviz`。它从相同赛道 YAML 发布
   `/mapping/cone_map`，并自动停用 LiDAR 检测与 cone_map_builder；不得用该模式评价感知、定位或建图。

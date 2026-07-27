@@ -20,7 +20,7 @@ localization_manager 统一发布 `/localization/pose`。NDT 组件仍不在默�
 - 赛道 YAML 读取、可见性/遮挡/噪声建模与 `PointCloud2` 合成；
 - 传统 PCL 锥筒检测（DL 后端为接口占位）；
 - 锥筒去重、颜色启发式、闭环检测与 YAML 保存；
-- Trackdrive 的 Delaunay 中心线，以及 Skidpad/Acceleration 的解析路径；
+- Trackdrive 的 Delaunay 中心线、重采样和曲率限速，以及 Skidpad/Acceleration 的解析路径；
 - Pure Pursuit 命令与仿真车辆闭环；
 - RViz 真值、感知、地图、中心线和控制目标可视化。
 
@@ -82,7 +82,7 @@ graph TD
 | `lidar_detection_node` | `lidar_detection` | 是（`launch_fsd`） | PCL/DL 检测；`/hesai/pandar` → `/perception/lidar/cones`、可视化 |
 | `cone_map_builder_node` | `cone_map_builder` | 是（`launch_fsd`） | TF 变换、去重/闭环；检测与 pose → `/mapping/cone_map` |
 | `boundary_detector_node` | `boundary_detector` | 是（`launch_fsd`） | Delaunay 中点中心线；地图、位姿、任务 → `/planning/centerline` |
-| `path_generator_node` | `path_generator` | 是（`launch_fsd`） | 赛项路径与速度；Skidpad 固定四圈+25 m 退出路径 → `/planning/final_waypoints` |
+| `path_generator_node` | `path_generator` | 是（`launch_fsd`） | 赛项路径与速度；Trackdrive 重采样后按曲率限速，Skidpad 固定四圈+25 m 退出路径 → `/planning/final_waypoints` |
 | `controller_node` | `controller` | 是（`launch_fsd`） | 带单调路径进度的 Pure Pursuit 与限幅；Skidpad/Acceleration 停车后通知任务完成 |
 | `mission_manager_node` | `mission_manager` | 是（`launch_fsd`） | 唯一 MissionState 发布者；就绪、开始、完成、急停与地图 → `/system/mission_state` |
 | `localization_manager_node` | `localization_manager` | 是（`launch_localization`） | EKF/NDT 位姿源切换；状态/`/odometry/filtered`/`/ndt/pose` → `/localization/pose` |

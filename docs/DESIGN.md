@@ -45,11 +45,15 @@ FSD 建图链路。
 ### 2.3 规划与控制
 
 Trackdrive：`BoundaryDetectorNode` 提取 lookahead 范围内的蓝/黄/未知锥筒，构建 Delaunay
-图并搜索中点序列，输出 `Lane`。Skidpad 按 `skidpad_start_*` 固定 map 参考生成：右环顺时针
+图并搜索中点序列，输出 `Lane`。`PathGeneratorNode` 将 Trackdrive 局部中心线按
+`trackdrive_resample_spacing` 重采样，并按三点曲率计算
+`v=sqrt(trackdrive_lateral_accel_limit / |curvature|)`，再钳制到
+`trackdrive_min_velocity..trackdrive_velocity`。Skidpad 按 `skidpad_start_*` 固定 map 参考生成：右环顺时针
 两圈、左环逆时针两圈，再沿进入方向退出 25 m 并制动；不以实时定位位姿重建。Acceleration
 按赛道 map 参考穿过 75 m 终点线后在 100 m 停止区恒减速度制动。控制器只在 `EXPLORE` 或 `RACE` 启用：通常以速度
 比例的 lookahead 选择目标点，Pure Pursuit 计算命令，`TwistFilter` 再执行车辆约束/安全
-过滤。Skidpad 专用 `skidpad_lookahead=3.0 m` 覆盖通用动态前视（5 m/s 下原本为 10 m）：
+过滤。Trackdrive 使用固定 `trackdrive_lookahead=5.0 m`，并在短暂失去前向目标时以低速保留上一有效命令，
+超时后停车；Acceleration 保持动态前视。Skidpad 专用 `skidpad_lookahead=3.0 m` 覆盖通用动态前视（5 m/s 下原本为 10 m）：
 圆的半径仅 9.125 m，10 m 前视会跨越交叉点的曲率切换，从而在第一/三圈切入内侧、或在第四圈
 出口过早卸载转向。自交叉 Skidpad 路径通过单调前向进度索引保持圈序；停车后控制器通知
 `mission_manager` 发布 `FINISH`。
@@ -91,7 +95,9 @@ FSD 的 `ros2_ws/src/system/can_interface/` 是实车 CAN/VCU 适配预留源码
 `SimulationBridge` 以 `/sim/ground_truth` 的 `Odometry.header.stamp` 和位置计算成绩，因此
 不受 INS/KISS-ICP/EKF 估计误差影响。Acceleration 从 `x=0` 起点线到 `x=75` 终点线；
 Skidpad 在 `x=0` 的同一条线完成每个圆；Trackdrive 使用两个橙色锥桶间的 `x=0` 起终线。
-仅在 `EXPLORE` 或 `RACE` 期间的 +X 跨线有效，并检查横向线段范围和最短单圈时间。
+仅在 `EXPLORE` 或 `RACE` 期间跨线有效，并检查横向线段范围和最短单圈时间。Trackdrive/Skidpad
+共用起终线：车辆先离开计时线区域，再允许任意方向回穿；Trackdrive 达到
+`trackdrive_finish_laps`（默认 3）后发布完成。
 
 控制器每次发布 `autoware_msgs/Command` 前填充 `header.stamp`。bridge 保存最新
 `/hesai/pandar.header.stamp`，在收到命令时发布两者之差到 `/system/simulator_latency`；这表示
@@ -121,7 +127,8 @@ Topic 被用于连续流（点云、位姿、路径、命令和状态）；当�
 | Trackdrive 路径 | Delaunay 中点路径 | 可由局部锥筒地图恢复赛道中心；Skidpad/Acceleration 用已知几何以避免不必要的锥筒依赖 |
 | Skidpad 交叉点跟踪 | Pure Pursuit 单调局部进度窗口 | 四圈与出口存在几何接近/重合点，按全部未来点搜索会直接跳至出口；每次只在有限连续窗口内推进可保证圈序 |
 | Skidpad 横向前视 | 固定 `skidpad_lookahead=3.0 m` | 通用 `v×2.0` 在 5 m/s 时为 10 m，接近圆半径并跨越交叉点的曲率突变；短前视保留当前圆的转向至实际切换点 |
-| Trackdrive 横向前视 | 固定 `trackdrive_lookahead=5.0 m` | 前视距离不再随 path_generator 的目标速度变化，便于稳定调参与比较规划路径对控制的影响；Acceleration 保持速度相关前视 |
+| Trackdrive 横向前视 | 固定 `trackdrive_lookahead=5.0 m`，短暂目标丢失低速保持 | 前视距离不再随 path_generator 的目标速度变化；局部中心线短暂反向/缺失时最多保持 0.5 s、2 m/s，超时停车，避免掉头或指令突变 |
+| Trackdrive 纵向速度 | 重采样局部中心线后按曲率限制目标速度 | 使用横向加速度上限计算弯道速度并钳制至最小/最大速度，解决全路径固定速度导致组合弯不减速的问题 |
 | 转向抖动抑制 | 连续 Pure Pursuit 曲率 + `max_steering_rate_deg_s` | 移除小横向误差的非连续放大；输出再按控制频率限转向速率，避免定位噪声直接成为执行器突变 |
 | Acceleration 停车 | 固定 map 路径 + 终点线后恒减速度 | 计时 75 m 内保持速度；停止区使用 `v²=2aΔx`，避免线性速度-距离剖面造成停止点前无限逼近 |
 | 仿真状态所有权 | mission_manager 唯一发布 MissionState | bridge 与状态机同时发布会产生竞争；bridge 只提供仿真 ready/start 输入与状态显示 |
