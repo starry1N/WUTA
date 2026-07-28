@@ -42,6 +42,18 @@ def generate_launch_description():
             LaunchConfiguration("use_track_truth_map"), "' == 'true'",
         ])
     )
+    fsd_with_simulated_colors = IfCondition(
+        PythonExpression([
+            "'", LaunchConfiguration("launch_fsd"), "' == 'true' and '",
+            LaunchConfiguration("use_track_truth_map"), "' == 'false' and '",
+            LaunchConfiguration("use_simulated_cone_colors"), "' == 'true'",
+        ])
+    )
+    perception_output_topic = PythonExpression([
+        "'/perception/lidar/cones_raw' if '",
+        LaunchConfiguration("use_simulated_cone_colors"),
+        "' == 'true' else '/perception/lidar/cones'",
+    ])
 
     vehicle_share = FindPackageShare("vehicle_model")
     can_share = FindPackageShare("can_simulator")
@@ -223,10 +235,29 @@ def generate_launch_description():
                     "config",
                     "lidar_detection.yaml",
                 ]
-            )
+            ),
+            {
+                "output_topic": ParameterValue(
+                    perception_output_topic, value_type=str
+                ),
+            },
         ],
         output="screen",
         condition=fsd_with_perception,
+    )
+    simulated_cone_colorizer = Node(
+        package="simulator_bringup",
+        executable="simulated_cone_colorizer",
+        name="simulated_cone_colorizer",
+        parameters=[
+            {
+                "track_file": LaunchConfiguration("track_file"),
+                "input_topic": "/perception/lidar/cones_raw",
+                "output_topic": "/perception/lidar/cones",
+            }
+        ],
+        output="screen",
+        condition=fsd_with_simulated_colors,
     )
     cone_map_builder = Node(
         package="cone_map_builder",
@@ -239,7 +270,17 @@ def generate_launch_description():
                     "config",
                     "cone_map_builder.yaml",
                 ]
-            )
+            ),
+            {
+                "assign_colors": ParameterValue(
+                    PythonExpression([
+                        "'",
+                        LaunchConfiguration("use_simulated_cone_colors"),
+                        "' == 'false'",
+                    ]),
+                    value_type=bool,
+                ),
+            },
         ],
         output="screen",
         condition=fsd_with_perception,
@@ -341,6 +382,16 @@ def generate_launch_description():
                 ),
             ),
             DeclareLaunchArgument(
+                "use_simulated_cone_colors",
+                default_value="false",
+                choices=["true", "false"],
+                description=(
+                    "Keep lidar_detection and cone_map_builder active, but "
+                    "match each detection to the loaded simulator track only "
+                    "to supply its camera-equivalent cone color."
+                ),
+            ),
+            DeclareLaunchArgument(
                 "auto_start",
                 default_value="true",
                 choices=["true", "false"],
@@ -437,7 +488,12 @@ def generate_launch_description():
                 base_to_lidar,
             ),
             _delayed(PythonExpression([delay, " * 2"]), localization, rviz, mission_manager),
-            _delayed(PythonExpression([delay, " * 3"]), track_truth_map, lidar_detection),
+            _delayed(
+                PythonExpression([delay, " * 3"]),
+                track_truth_map,
+                simulated_cone_colorizer,
+                lidar_detection,
+            ),
             _delayed(PythonExpression([delay, " * 4"]), cone_map_builder),
             _delayed(PythonExpression([delay, " * 5"]), boundary_detector),
             _delayed(PythonExpression([delay, " * 6"]), path_generator),

@@ -24,7 +24,9 @@ INS 将 ground truth 加噪后发布 `/cg410/odometry`，KISS-ICP 从 `/hesai/pa
 Trackdrive 完成首圈建图并通过地图、定位和冻结中心线门槛后进入 `RACE`，第三圈后进入
 `FINISH`；Skidpad/Acceleration 仍由控制器的 `/system/mission_complete` 完成。
 默认的 `/localization/pose` 与动态 `odom -> base_link` TF 由融合定位链发布；bridge 的真值
-pose/TF 仅在 `use_ground_truth_localization:=true` 时启用。
+pose publisher 和 TF broadcaster 仅在 `use_ground_truth_localization:=true` 时创建。
+根目录默认配置为 `false`，因此正常启动只有 `localization_manager` 发布
+`/localization/pose`。
 
 RViz 默认显示 `/system/status_viz`：任务模式、`EXPLORE/FINISH` 状态、
 `/system/mission_complete` 对应的完成状态、`/sim/ground_truth` 的速度和位置、最近单圈用时以及
@@ -65,6 +67,29 @@ ros2 topic echo /system/simulator_latency
 真值 `ConeMap` 第一圈保持 `is_closed=false`，收到正式 `/system/lap_count=1` 后置
 `is_closed=true`。它只提供锥桶坐标和颜色，不向规划发布 YAML 中心线；完整中心线仍由
 `boundary_detector` 从闭环 ConeMap 生成、排序、验收并冻结。
+
+### 模拟相机颜色注入模式
+
+需要验证实际 LiDAR 检测、去重和闭环建图时，关闭真值地图快捷模式，并只把赛道 YAML
+中的正确颜色赋给当前帧检测锥桶：
+
+```bash
+./start_simulator.sh --rviz \
+  use_track_truth_map:=false \
+  use_simulated_cone_colors:=true
+```
+
+此时数据链为
+`/hesai/pandar -> lidar_detection -> /perception/lidar/cones_raw
+-> simulated_cone_colorizer -> /perception/lidar/cones -> cone_map_builder`。
+颜色节点使用检测时间戳对应的 `/sim/ground_truth` 位姿，把检测中心转换到 `map`，在
+`1.0 m` 门限内匹配 YAML 锥桶并只复制颜色；坐标、命中次数、去重、闭环判定和
+`/mapping/cone_map` 均仍由在线检测与 `cone_map_builder` 产生。未匹配检测保留为未知色，
+且该模式会关闭 builder 的左右位置颜色启发式，避免错误颜色覆盖模拟相机结果。
+
+`use_track_truth_map` 与 `use_simulated_cone_colors` 解决不同问题：前者隔离验证规划/控制，
+后者验证感知到建图的完整几何链路。两者都只是无相机仿真替代；接入真实相机后，应由
+`camera_detection`/`detection_fusion` 提供颜色。
 
 ### RViz 手动就绪调试
 
@@ -180,6 +205,8 @@ ros2 launch simulator_bringup simulator.launch.py use_ground_truth_localization:
 ros2 launch simulator_bringup simulator.launch.py auto_start:=false
 ros2 launch simulator_bringup simulator.launch.py \
   track_file:=trackdrive mission_mode:=trackdrive trackdrive_finish_laps:=3
+ros2 launch simulator_bringup simulator.launch.py \
+  use_track_truth_map:=false use_simulated_cone_colors:=true
 ros2 launch simulator_bringup simulator.launch.py \
   track_file:=/path/to/track.yaml start_x:=1.0 start_y:=2.0 start_yaw:=0.5
 ```

@@ -103,6 +103,12 @@ INS 包位于 `WUTA-SIM/wuta-ins-simulator`，并已是 `simulator_bringup` 的�
   `/mapping/cone_map`，并自动停用 LiDAR 检测与 cone_map_builder。该模式只把锥桶坐标和正确颜色
   作为模拟相机结果，首个正式圈后才闭环；规划仍必须从 ConeMap 生成中心线，不得读取 YAML
   reference centerline，也不得用该模式评价感知、定位或建图。
+- 需要保留 LiDAR 检测和在线建图、只模拟相机颜色时，使用
+  `./start_simulator.sh use_track_truth_map:=false use_simulated_cone_colors:=true --rviz`。
+  检测器改发 `/perception/lidar/cones_raw`，颜色节点按采样时刻真值位姿匹配 YAML 后改发
+  `/perception/lidar/cones`。它只修改 `color`；坐标、去重、命中次数、闭环和 ConeMap
+  均来自在线链路。未匹配锥桶保持未知色，builder 的位置颜色启发式在此模式下关闭。
+  该模式用于仿真建图验收，真实系统应由 camera/fusion 链路替代。
 - RViz 默认关闭 `/hesai/pandar` 原始点云和 `/perception/lidar/cones_viz`
   未知色检测层。二者是白色调试层；检查颜色时优先看
   `/sim/lidar/track_cones` 与 `/mapping/cone_map_viz`。
@@ -116,6 +122,8 @@ INS 包位于 `WUTA-SIM/wuta-ins-simulator`，并已是 `simulator_bringup` 的�
 - 点云、ConeArray 必须保留采样时间；`cones_viz` 必须在采样时刻精确转换到 `map` 后发布，禁止用零时间戳将历史检测套用到当前 TF。
   ConeMapBuilder 只使用检测采样时刻 TF；暂时不可用时在 `pending_detection_timeout_sec`
   时间内排队重试，默认不使用 latest TF，避免运动造成地图偏移。
+  闭环冻结前会以现有 `merge_distance` 合并已收敛的同色/未知色兼容重复轨迹；不要为了
+  消除重复堆叠而扩大在线半径，以免紧邻赛段的真实锥桶被合并。
 - 路径调试同时观察 `/planning/final_waypoints_viz` 与 `/planning/driven_trajectory_viz`。前者是规划目标；后者来自定位估计且只做显示平滑。判断仿真车辆真实轨迹应对照 `/sim/ground_truth`，不要把二者混为一谈。
 - 默认 bringup 中 `mission_manager` 是 `/system/mission_state` 的唯一发布者。手动状态机调试使用：
 
@@ -127,6 +135,7 @@ INS 包位于 `WUTA-SIM/wuta-ins-simulator`，并已是 `simulator_bringup` 的�
 - Acceleration 的规则源为 `docs/accelerationrules.txt` 与
   `WUTA-SIM/perception_simulation/tracks/acceleration.yaml`：起步 `x=-0.30 m`，计时
   `x=0..75 m`，停止区到 `x=175 m`。修改路径速度剖面时必须保持终点线前不制动、停止区内停车。
+  Skidpad/Acceleration 的零速终点不得在进入 `finish_position_tolerance` 前推进为当前进度点。
 
 ## 5. 代码与 Git 规范
 

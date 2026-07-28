@@ -40,7 +40,17 @@ FSD 建图链路。
 检测器以高度阈值或 RANSAC 去地面、体素下采样、欧氏聚类，再以宽度/高度/距离筛选。
 `ConeMapBuilder` 以消息时间戳查询 `map <- sensor_frame`，在 `merge_distance` 内对坐标
 做命中次数加权平均；未确认锥筒在发布前由 `min_hit_count` 过滤。颜色可按车辆航向的
-左右叉积分配。达到最少确认数量且车辆离开又回到起点阈值内时，地图闭环并保存 YAML。
+左右叉积分配。达到最少确认数量、累计行驶阈值、起点距离和起点朝向条件后，地图闭环并
+保存 YAML。
+闭环冻结前会按同一 `merge_distance` 对同色或未知色兼容轨迹做传递式最终合并，处理
+独立轨迹均值在一圈内逐渐收敛后形成的重复堆叠；在线半径不扩大，避免误合并真实相邻锥桶。
+
+无相机仿真可启用 `use_simulated_cone_colors`。检测器先将无颜色 ConeArray 发布到
+`/perception/lidar/cones_raw`，`simulated_cone_colorizer` 使用同一采样时刻的真值位姿
+将检测中心变换到 `map`，与 YAML 锥桶做距离门控匹配后仅复制颜色，再交给
+`ConeMapBuilder`。builder 在该模式下关闭左右位置颜色启发式，但仍独立负责坐标估计、
+命中融合、去重和闭环；因此该模式可评价建图几何，不等同于 `use_track_truth_map` 的
+完整 ConeMap 快捷输入。真实系统仍应由相机检测与融合节点提供颜色。
 
 ### 2.3 规划与控制
 
@@ -58,7 +68,8 @@ Skidpad 按 `skidpad_start_*` 固定 map 参考生成：右环顺时针
 过滤。Trackdrive 使用固定 `trackdrive_lookahead=5.0 m`，并在短暂失去前向目标时以低速保留上一有效命令，
 超时后停车；Acceleration 保持动态前视。Skidpad 专用 `skidpad_lookahead=3.0 m` 覆盖通用动态前视（5 m/s 下原本为 10 m）：
 圆的半径仅 9.125 m，10 m 前视会跨越交叉点的曲率切换，从而在第一/三圈切入内侧、或在第四圈
-出口过早卸载转向。自交叉 Skidpad 路径通过单调前向进度索引保持圈序；停车后控制器通知
+出口过早卸载转向。自交叉 Skidpad 路径通过单调前向进度索引保持圈序；零速终点只有在车辆
+进入完成位置容差后才能成为进度点，避免定位噪声导致出口或停止区提前停车；停车后控制器通知
 `mission_manager` 发布 `FINISH`。
 
 ### 2.4 定位模式
@@ -70,6 +81,7 @@ Skidpad 按 `skidpad_start_*` 固定 map 参考生成：右环顺时针
 `map -> odom` 与 `base_link -> lidar`，避免 TF 发布者冲突。`LocalizationManager` 在
 `LOC_KISS_ICP` 时将 `/odometry/filtered` 转为 `/localization/pose`，在 `LOC_NDT` 时接受
 `/ndt/pose`。`use_ground_truth_localization:=true` 是调试回退，不应与默认 EKF TF 并用。
+该参数为 `false` 时，`simulation_bridge` 不创建真值 pose publisher 或 TF broadcaster。
 NDT 读取 PCD 地图、等待初始位姿，在 NDT 模式对降采样 scan 匹配并维护最多 500 个 pose
 的路径。`map_saver` 的传感器到 map 变换在源码中仍标为 TODO，使用它保存地图前必须验证
 TF 假设。
@@ -127,7 +139,7 @@ Topic 被用于连续流（点云、位姿、路径、命令和状态）；当�
 
 | 问题 | 选择 | 原因与替代方案 |
 | --- | --- | --- |
-| 真值赛道如何调试 | 默认 `/sim/lidar/track_cones` 静态、Transient Local marker；可选 `use_track_truth_map` 转为 `ConeMap` 并渲染 `/mapping/cone_map_viz` | 快捷模式模拟相机为地图锥桶提供正确颜色，首个正式圈后才置闭环；只提供锥桶坐标/颜色，不向规划提供 YAML 中心线，且不能用于评价感知/建图 |
+| 真值赛道如何调试 | 默认 `/sim/lidar/track_cones` 只作静态 marker；`use_track_truth_map` 提供完整 ConeMap 快捷输入；`use_simulated_cone_colors` 只给在线 LiDAR 检测补颜色 | 快捷地图用于隔离规划/控制；颜色注入保留在线坐标、去重和闭环建图。两种模式均不向规划提供 YAML 中心线，也不替代正式相机融合 |
 | 坐标变换 | ConeMapBuilder 只按检测时间查询 TF，短暂缺失时排队重试 | 保持传感器时序，避免用车辆当前位姿转换历史点云造成系统性偏移 |
 | Trackdrive 路径 | EXPLORE 局部路径 + 闭环地图冻结全局中心线 | 第一圈在线建图，后两圈沿已验收的有序环线竞速；中心线始终由 ConeMap 推导 |
 | Skidpad 交叉点跟踪 | Pure Pursuit 单调局部进度窗口 | 四圈与出口存在几何接近/重合点，按全部未来点搜索会直接跳至出口；每次只在有限连续窗口内推进可保证圈序 |

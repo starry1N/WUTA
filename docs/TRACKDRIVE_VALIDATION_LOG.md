@@ -2,7 +2,84 @@
 
 日期：2026-07-22
 环境：Ubuntu 22.04 / ROS 2 Humble / `<repo-root>`
-验证模式：`use_ground_truth_localization:=true`，先绕过 INS/KISS-ICP/EKF，只验证感知、建图、规划、控制闭环。赛道 YAML 仅用于 LiDAR 仿真生成锥桶真值和离线误差评估，不作为 Trackdrive 规划输入。
+验证模式：`use_ground_truth_localization:=true`，先绕过 INS/KISS-ICP/EKF，只验证感知、建图、规划、控制闭环。赛道 YAML 用于 LiDAR 仿真生成锥桶真值、可选模拟相机颜色和离线误差评估，不作为 Trackdrive 中心线输入。
+
+## 2026-07-28 正常定位全模拟器验收
+
+本轮在独立干净验收副本中使用 `use_ground_truth_localization:=false`，实际启动
+`ins_simulator`、KISS-ICP、EKF 和 `localization_manager`。默认配置也改为该模式；
+`simulation_bridge` 仅保留真值计时，在关闭真值定位时不创建 `/localization/pose`
+发布器或真值 TF broadcaster。运行中 `/localization/pose` 只有
+`localization_manager` 一个发布端点。
+
+标准 `trackdrive.yaml` 使用真值 ConeMap 快捷输入完成三圈，圈时为
+79.85 / 52.25 / 47.15 s，状态完整经过
+`EXPLORE → MAPPING_DONE → RACE → FINISH`，第三圈后控制指令为零。连续 8 s
+定位抽样中，INS 平面误差 mean/p95/max 为 0.063/0.128/0.166 m，EKF 为
+0.189/1.084/1.580 m；EKF 偶有 update-rate warning，但没有阻断状态机。
+
+Track2 使用在线链路
+`lidar_detection → simulated_cone_colorizer → cone_map_builder`。闭环前内部地图一度
+存在 10 条已收敛到 `merge_distance=0.5 m` 内的重复轨迹；闭环最终合并后内部地图
+为 531 个锥桶，与真值总数一致。发布/保存的确认地图为蓝 265、黄 264，0.5 m 内重复
+对为 0，颜色错误为 0；建图点到同色最近真值的 mean/p95/max 为
+0.049/0.121/0.183 m。两个真值点因命中次数不足未进入确认地图。
+
+| 正式圈次 | 阶段 | 用时 | 结果 |
+| ---: | --- | ---: | --- |
+| 1/3 | EXPLORE | 216.66 s | 在线建图闭合，合并 10 条重复轨迹，五项 RACE 门槛通过 |
+| 2/3 | RACE | 77.30 s | 使用冻结全局中心线完成 |
+| 3/3 | RACE | 71.64 s | `lap_count=3`，进入 `FINISH` 并停车 |
+
+其它赛事模式同样使用正常定位链回归：
+
+- Acceleration：0–75 m 为 5.116 s，在停止区末端进入 `FINISH`；最终真值
+  `x=175.804 m`、速度 0，控制指令为零。
+- Skidpad：入口计时 5.242 s，四圈分别为
+  11.536 / 11.641 / 11.583 / 11.579 s；车辆进入 25 m 出口终点容差后发布
+  `/system/mission_complete`，最终状态和控制指令均为停车。
+- `WUTA-SIM` 全包测试汇总为 10 tests、0 failures、0 errors、2 skipped。
+
+剩余风险：完整 FSD 测试中 vendored `robot_localization` 的 EKF/UKF interface launch
+tests 失败；EKF 在独立 ROS domain 重跑后 10 项通过 7 项，失败项为
+`PoseBasicIO`、`TwistBasicIO` 和 `ImuDifferentialIO`。实际赛事链路全部完成，但该第三方
+测试失败仍需后续单独处理。Track2 第一圈局部中心线较短时会多次降到 3 m/s，并出现短暂停车
+后自恢复；mission_manager 直接积分高频融合位姿也会高估圈距，因此当前圈距只作诊断，
+正式完成条件以有限起终线穿越和圈次为准。
+
+## 2026-07-28 track2 在线建图与模拟颜色验收
+
+用户实际 `track2.yaml` 为 265 个蓝锥、266 个黄锥、约 667 m 的 autocross 赛道。先以
+`use_track_truth_map:=true` 回归现有快捷模式，三圈均完成，证明当前版本不会在首圈结束后
+停在 `MAPPING_DONE`。随后使用以下参数验收新模拟颜色链路：
+
+```bash
+./start_simulator.sh --skip-build \
+  track_file:=/path/to/track2.yaml \
+  mission_mode:=trackdrive \
+  use_track_truth_map:=false \
+  use_simulated_cone_colors:=true \
+  use_ground_truth_localization:=true \
+  launch_rviz:=false
+```
+
+该运行保留 `lidar_detection` 与 `cone_map_builder`，YAML 只用于给当前检测补颜色。颜色匹配
+日志持续为 100%；builder 首圈闭合时内部地图为 531 个锥桶，发布的确认地图为蓝 265、
+黄 265、未知 0，通过地图质量门槛；`boundary_detector` 从该闭环地图冻结 266 点全局
+中心线，置信度 0.904。与 531 个 YAML 真值锥桶逐点核对后，确认地图漏检 1 个、重复匹配
+0 个；建图点到最近真值的平均/最大距离为 0.009/0.032 m，任意两建图点最小间距
+1.506 m，`0.5 m` 内重叠对为 0。因此未出现单锥重复堆叠或地图数量膨胀。
+
+| 正式圈次 | 阶段 | 用时 | 距离 | 结果 |
+| ---: | --- | ---: | ---: | --- |
+| 1/3 | EXPLORE | 181.39 s | 668.5 m | 在线地图闭合，五项 RACE 门槛通过 |
+| 2/3 | RACE | 76.47 s | 667.1 m | 使用冻结全局中心线完成 |
+| 3/3 | RACE | 71.85 s | 667.2 m | 完成后 `RACE → FINISH` |
+
+首圈后没有状态机停车；最终 `/control/command` 为 `speed=0.0`、`angle=0.0`、
+`dv_state=4`。但首圈约 110 秒处局部中心线曾短暂断供，控制器先以 2 m/s 保持再停车，
+之后重新获得目标并自行恢复。该现象未阻止闭环，仍应作为在线局部规划的剩余风险保留，
+不能把本轮结论表述为“首圈全程无停车”。
 
 ## 2026-07-27 三圈竞速状态机验收
 

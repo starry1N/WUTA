@@ -54,8 +54,10 @@ class SimulationBridge(Node):
             self.get_parameter("mission_mode_cmd").value
         )
 
-        self.pose_pub = self.create_publisher(
-            PoseStamped, "/localization/pose", 10
+        self.pose_pub = (
+            self.create_publisher(PoseStamped, "/localization/pose", 10)
+            if self.publish_truth_localization
+            else None
         )
         self.localization_ready_pub = self.create_publisher(
             Bool, "/system/localization_ready", 10
@@ -85,7 +87,11 @@ class SimulationBridge(Node):
         self.latency_pub = self.create_publisher(
             Float64, "/system/simulator_latency", 10
         )
-        self.tf_broadcaster = TransformBroadcaster(self)
+        self.tf_broadcaster = (
+            TransformBroadcaster(self)
+            if self.publish_truth_localization
+            else None
+        )
 
         self.ground_truth_sub = self.create_subscription(
             Odometry, ground_truth_topic, self._on_ground_truth, 10
@@ -141,6 +147,7 @@ class SimulationBridge(Node):
         pose.header = msg.header
         pose.header.frame_id = self.map_frame
         pose.pose = msg.pose.pose
+        assert self.pose_pub is not None
         self.pose_pub.publish(pose)
 
         transform = TransformStamped()
@@ -150,6 +157,7 @@ class SimulationBridge(Node):
         transform.transform.translation.y = pose.pose.position.y
         transform.transform.translation.z = pose.pose.position.z
         transform.transform.rotation = pose.pose.orientation
+        assert self.tf_broadcaster is not None
         self.tf_broadcaster.sendTransform(transform)
 
     def _on_mission_state(self, msg: MissionState) -> None:

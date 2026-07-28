@@ -11,12 +11,14 @@ launch_arguments:
   mission_mode: trackdrive
   launch_fsd: true
   use_track_truth_map: true
+  use_simulated_cone_colors: false
   auto_start: true
   manual_ready: false
   startup_delay: 0.5
+  trackdrive_finish_laps: 3
   launch_ins: true
   launch_localization: true
-  use_ground_truth_localization: true
+  use_ground_truth_localization: false
   launch_rviz: true
   rviz_config: WUTA-SIM/simulator_bringup/rviz/wuta_simulator.rviz
   wheel_base: 1.53

@@ -19,7 +19,7 @@ localization_manager 统一发布 `/localization/pose`。NDT 组件仍不在默�
 
 - 赛道 YAML 读取、可见性/遮挡/噪声建模与 `PointCloud2` 合成；
 - 传统 PCL 锥筒检测（DL 后端为接口占位）；
-- 锥筒去重、颜色启发式、闭环检测与 YAML 保存；
+- 锥筒在线去重、闭环冻结前最终收敛合并、颜色启发式、闭环检测与 YAML 保存；
 - Trackdrive 第一圈局部中心线、闭环地图生成的冻结全局中心线、分圈曲率限速，以及 Skidpad/Acceleration 的解析路径；
 - Pure Pursuit 命令与仿真车辆闭环；
 - RViz 真值、感知、地图、中心线和控制目标可视化。
@@ -35,6 +35,7 @@ graph TD
   LS -->|/hesai/pandar| LD[lidar_detection_node]
   LS -->|/hesai/pandar| KISS[kiss_icp_node]
   LS -->|scan stamp| SB
+  VM -->|timestamped pose| SCC[simulated_cone_colorizer]
   KISS -->|/kiss/odometry| EKF[ekf_node]
   INS -->|/cg410/odometry| EKF
   EKF -->|/odometry/filtered| LM[localization_manager]
@@ -45,7 +46,9 @@ graph TD
   LS -->|/sim/lidar/track_cones| RVIZ[RViz2]
   TTM[track_truth_map_publisher] -->|/mapping/cone_map truth shortcut| BD
   LS -->|/sim/lidar/visible_cones| RVIZ
-  LD -->|/perception/lidar/cones| CMB
+  LD -->|/perception/lidar/cones_raw, optional| SCC
+  SCC -->|/perception/lidar/cones with truth color| CMB
+  LD -->|/perception/lidar/cones, normal mode| CMB
   CMB -->|/mapping/cone_map| BD
   SB -->|/system/lidar_ready, /system/start_command| MM[mission_manager_node]
   SB -->|/system/mission_mode_cmd, /system/emergency, /system/inspection_trigger| MM
@@ -81,7 +84,8 @@ graph TD
 | `ins_simulator` | `ins_simulator` submodule | 是 | 真值加噪的 CG-410 适配；`/sim/ground_truth` → `/cg410/odometry` |
 | `lidar_simulator` | `lidar_sim` | 是 | YAML 赛道/车辆位姿生成点云与真值 marker；`/sim/ground_truth` → `/hesai/pandar`、`/sim/lidar/*` |
 | `track_truth_map_publisher` | `simulator_bringup` | 仅 `use_track_truth_map=true` | 将 YAML 锥桶坐标和正确颜色转换为 `/mapping/cone_map`，模拟相机提供可靠颜色；正式首圈完成后置 `is_closed=true`，但不发布 YAML 中心线 |
-| `simulation_bridge` | `simulator_bringup` | 是 | 就绪、仿真开始输入、真值单圈对照计时、LiDAR→命令延迟、真值调试 pose/TF 与状态可视化；不拥有 Trackdrive 圈次或 MissionState |
+| `simulated_cone_colorizer` | `simulator_bringup` | 仅 `use_track_truth_map=false` 且 `use_simulated_cone_colors=true` | 按检测时间戳和真值位姿匹配 YAML 锥桶，只把正确颜色赋给 LiDAR 检测；不发布坐标、地图或中心线 |
+| `simulation_bridge` | `simulator_bringup` | 是 | 就绪、仿真开始输入、真值单圈对照计时、LiDAR→命令延迟、真值调试 pose/TF 与状态可视化；关闭真值定位时不注册 pose/TF 发布端点；不拥有 Trackdrive 圈次或 MissionState |
 | `lidar_detection_node` | `lidar_detection` | 是（`launch_fsd`） | PCL/DL 检测；`/hesai/pandar` → `/perception/lidar/cones`、可视化 |
 | `cone_map_builder_node` | `cone_map_builder` | 是（`launch_fsd`） | TF 变换、去重/闭环；检测与 pose → `/mapping/cone_map` |
 | `boundary_detector_node` | `boundary_detector` | 是（`launch_fsd`） | EXPLORE 局部中心线；闭环后从蓝黄锥配对、排序并冻结全局中心线，同时发布路径置信度 |
