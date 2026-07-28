@@ -4,6 +4,36 @@
 环境：Ubuntu 22.04 / ROS 2 Humble / `<repo-root>`
 验证模式：`use_ground_truth_localization:=true`，先绕过 INS/KISS-ICP/EKF，只验证感知、建图、规划、控制闭环。赛道 YAML 用于 LiDAR 仿真生成锥桶真值、可选模拟相机颜色和离线误差评估，不作为 Trackdrive 中心线输入。
 
+## 2026-07-29 track2 默认配置全链路验收
+
+本轮从 GitHub 最新父仓库和 FSD 子模块开始，在虚拟机正式目录使用
+`config/simulator_defaults.yaml` 启动。定位保持
+`use_ground_truth_localization:=false`，实际运行 INS、KISS-ICP、EKF 和
+`localization_manager`；感知与建图保持
+`lidar_detection -> simulated_cone_colorizer -> cone_map_builder`，未启用
+`use_track_truth_map`。
+
+密集赛道使用 50 m 量程执行逐锥遮挡时，单帧耗时可超过 4 s，后半圈会使点云时间戳
+落后并被颜色注入节点拒绝；完全关闭遮挡则会放入过多紧邻赛段锥桶，75 s 内地图膨胀到
+630 个并出现 69 组 0.5 m 内近重复。最终默认保留
+`lidar_enable_occlusion:=true`，把 `lidar_max_range:=20.0` 与下游检测距离对齐。
+
+首圈闭环后地图为蓝 265、黄 266，共 531 个锥桶，与 track2 真值总数一致；闭环归并后
+0.5 m 内近重复为 0。建图点到同色最近真值的 mean/p95/max 为
+0.041/0.081/0.123 m，没有误差超过 0.5 m 的锥桶。`boundary_detector` 从闭环 ConeMap
+生成并冻结 266 点有序全局中心线，置信度 0.895，随后状态立即从
+`EXPLORE -> MAPPING_DONE -> RACE`。
+
+| 正式圈次 | 阶段 | 用时 | 距离 | 结果 |
+| ---: | --- | ---: | ---: | --- |
+| 1/3 | EXPLORE | 210.40 s | 900.7 m | 在线地图闭环，五项 RACE 门槛通过 |
+| 2/3 | RACE | 78.79 s | 722.5 m | 冻结中心线竞速，最高车速达到 10 m/s |
+| 3/3 | RACE | 72.21 s | 711.4 m | `lap_count=3`，`RACE -> FINISH` |
+
+停车补测先向车辆模型发送 10 m/s，再发布 `MissionState.FINISH`；控制器最后命令和
+`/sim/ground_truth` 线速度均变为 0.000 m/s。由此完整验证了首圈在线建图、闭环切换、
+两圈竞速和第三圈后停车。
+
 ## 2026-07-28 正常定位全模拟器验收
 
 本轮在独立干净验收副本中使用 `use_ground_truth_localization:=false`，实际启动
@@ -179,8 +209,8 @@ cd <repo-root>
 | `path_generator` | Trackdrive 按局部路径曲率限制 waypoint 速度，参数为 `trackdrive_min_velocity` 与 `trackdrive_lateral_accel_limit` | 弯道目标速度可低于直道目标速度，降低紧弯高速过冲风险；不使用赛道 YAML 真值 |
 | `controller` | Trackdrive 固定 `trackdrive_lookahead=5.0 m`，并使用前视目标点的速度 | 局部中心线每次刷新都会从车辆起点重新计数；读取前视点速度可将曲率限速带入弯道，避免起点速度恒为 7 m/s |
 | `controller` | 只选择车体前方目标；无前方目标时停车 | 防止瞬时反向路径引导车辆掉头绕圈 |
-| `lidar_sim` | LiDAR FOV 调整为 360 deg | 更符合 Hesai 128 旋转激光雷达；侧后方锥桶可进入建图 |
-| `lidar_sim` | 关闭简化遮挡模型 `enable_occlusion=false` | 原遮挡模型会把同侧远处锥桶成片挡掉，导致直道前方地图不足；关闭后感知地图更稳定 |
+| `simulator_bringup` | Trackdrive LiDAR 请求 `fov_deg=360` | 扩大默认前向可见窗口，避免 120 deg 配置在急弯只剩单侧边界 |
+| `simulator_bringup` | 保留遮挡并将 `max_range` 限为 20 m | 与检测器有效量程一致，避免 50 m 全图遮挡计算拖旧时间戳，同时过滤紧邻赛段的被遮挡锥桶 |
 | `can_simulator` | logger 改为 f-string | 修复 Python logger 参数格式问题，减少运行期噪声 |
 | 文档 | 更新 planning/controller/ROS interface 说明 | 对齐当前实现，明确 Trackdrive 不读取 YAML 中心线 |
 

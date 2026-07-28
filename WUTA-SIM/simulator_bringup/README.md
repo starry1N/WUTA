@@ -91,6 +91,13 @@ ros2 topic echo /system/simulator_latency
 后者验证感知到建图的完整几何链路。两者都只是无相机仿真替代；接入真实相机后，应由
 `camera_detection`/`detection_fusion` 提供颜色。
 
+默认请求 `lidar_fov_deg:=360.0`，把当前外部 `track_loader` 子模块允许的前向窗口扩到最大，
+保证急弯中两侧锥桶仍可见；该子模块目前仍有独立的车前方过滤，因此这还不等同于真实 Hesai
+128 的完整水平环视。需要复现更窄的前向传感器时可显式覆盖，例如 `lidar_fov_deg:=120.0`。
+整车闭环保留 `lidar_enable_occlusion:=true`，并把 `lidar_max_range:=20.0` 与
+`lidar_detection.max_detection_range` 对齐。这样既过滤紧邻赛段中被边界遮挡的锥桶，也避免
+为检测器必然丢弃的 20–50 米锥桶执行昂贵的逐锥遮挡计算。
+
 ### RViz 手动就绪调试
 
 需要手动控制状态机就绪时，以 `manual_ready:=true` 启动。bridge 会在 RViz 点击前保持

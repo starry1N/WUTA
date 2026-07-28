@@ -29,16 +29,16 @@ git submodule update --init --recursive
 | --- | --- |
 | 仿真 LiDAR | `WUTA-SIM/perception_simulation/config/lidar_simulator.yaml` |
 | 仿真 INS（submodule） | `WUTA-SIM/wuta-ins-simulator/launch/ins_simulator.launch.py` |
-| 赛道 | `WUTA-SIM/perception_simulation/tracks/{trackdrive,skidpad,acceleration}.yaml` |
+| 赛道 | 标准赛道位于 `WUTA-SIM/perception_simulation/tracks/`；Trackdrive 验收赛道 `track2.yaml` 位于根目录 `tracks/` |
 | 感知/地图/规划/控制 | 各 FSD package 的 `config/*.yaml` |
 | KISS-ICP | `WUTA-FSD/ros2_ws/src/localization/kiss_icp_wrapper/config/kiss_icp_hesai128.yaml` |
 | EKF | `WUTA-FSD/ros2_ws/src/localization/localization_manager/config/ekf.yaml` |
 | NDT/保存地图 | `WUTA-FSD/ros2_ws/src/localization/ndt_localization/config/ndt_localization.yaml` |
 | RViz | `WUTA-SIM/simulator_bringup/rviz/wuta_simulator.rviz` |
 
-`trackdrive1.yaml` 已从感知仿真子仓库删除；Trackdrive 应使用 `trackdrive.yaml`。如本地
-`config/simulator_defaults.yaml` 指向旧文件，请在启动前改为有效赛道名或以
-`track_file:=trackdrive` 覆盖。
+`start_simulator.sh` 会把仓库根目录作为赛道名解析基准，因此默认的 `track_file: track2`
+可同时被 LiDAR 模拟器和模拟颜色节点解析。直接使用 `ros2 launch` 时可传绝对 YAML 路径；
+标准 Trackdrive 仍可用 `track_file:=trackdrive` 覆盖。
 
 部署前为真实硬件复核 frame、话题名、QoS、LiDAR 外参和 EKF 输入。NDT 默认地图路径为
 `/tmp/wuta_lidar_map.pcd`；锥筒地图保存默认 `/tmp/wuta_cone_map.yaml`，应替换为有权限且

@@ -91,9 +91,10 @@ INS 包位于 `WUTA-SIM/wuta-ins-simulator`，并已是 `simulator_bringup` 的�
 
 ## 4. 配置与调试规则
 
-- 配置文件位于各包 `config/`；赛道 YAML 位于
-  `WUTA-SIM/perception_simulation/tracks/`。当前标准文件为 `trackdrive.yaml`、`skidpad.yaml`
-  与 `acceleration.yaml`；`trackdrive1.yaml` 已删除，新的默认/测试配置不得再引用它。不要把生成的
+- 配置文件位于各包 `config/`；标准赛道 YAML 位于
+  `WUTA-SIM/perception_simulation/tracks/`，在线建图验收用 `track2.yaml` 位于根目录 `tracks/`。
+  当前标准文件为 `trackdrive.yaml`、`skidpad.yaml` 与 `acceleration.yaml`；
+  `trackdrive1.yaml` 已删除，新的默认/测试配置不得再引用它。不要把生成的
   `/tmp/wuta_*.yaml`/PCD 当作源码。
 - 默认模式下，`/sim/lidar/track_cones` 是 YAML 真值，`/mapping/cone_map_viz` 是 FSD 估计地图。
   `use_track_truth_map:=true` 时后者改由同一 YAML 转换的真值 `ConeMap` 渲染；调试记录必须标明当前模式，
@@ -108,6 +109,10 @@ INS 包位于 `WUTA-SIM/wuta-ins-simulator`，并已是 `simulator_bringup` 的�
   检测器改发 `/perception/lidar/cones_raw`，颜色节点按采样时刻真值位姿匹配 YAML 后改发
   `/perception/lidar/cones`。它只修改 `color`；坐标、去重、命中次数、闭环和 ConeMap
   均来自在线链路。未匹配锥桶保持未知色，builder 的位置颜色启发式在此模式下关闭。
+- Hesai 128 仿真默认请求 `lidar_fov_deg:=360.0`，但外部 `track_loader` 子模块当前仍有
+  独立车前方过滤，所以有效覆盖是最大前向窗口而非完整环视。`120°` 只用于显式退化测试。
+- 整车闭环保留 `lidar_enable_occlusion:=true`，同时使用 `lidar_max_range:=20.0` 与下游
+  检测距离一致，避免为检测器必然丢弃的远处锥桶执行逐锥遮挡计算并拖旧点云时间戳。
   该模式用于仿真建图验收，真实系统应由 camera/fusion 链路替代。
 - RViz 默认关闭 `/hesai/pandar` 原始点云和 `/perception/lidar/cones_viz`
   未知色检测层。二者是白色调试层；检查颜色时优先看

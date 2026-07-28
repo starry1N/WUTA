@@ -1,5 +1,6 @@
 """Publish the LiDAR simulator's loaded YAML map as an algorithm-side ConeMap."""
 
+import os
 from pathlib import Path
 from typing import Any, Optional
 
@@ -19,11 +20,19 @@ def _resolve_track_file(value: str) -> Path:
     if candidate.is_file():
         return candidate
 
-    tracks_dir = Path(get_package_share_directory("lidar_sim")) / "tracks"
-    for name in (value, f"{value}.yaml"):
-        candidate = tracks_dir / name
-        if candidate.is_file():
-            return candidate
+    search_dirs = [
+        Path(get_package_share_directory("lidar_sim")) / "tracks",
+        Path.cwd() / "tracks",
+    ]
+    if os.environ.get("WUTA_ROOT"):
+        search_dirs.insert(1, Path(os.environ["WUTA_ROOT"]) / "tracks")
+
+    names = (value, f"{value}.yaml") if not Path(value).suffix else (value,)
+    for tracks_dir in search_dirs:
+        for name in names:
+            candidate = tracks_dir / name
+            if candidate.is_file():
+                return candidate
     raise FileNotFoundError("Track file not found: %s" % value)
 
 

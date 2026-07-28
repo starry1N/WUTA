@@ -102,15 +102,29 @@ def generate_launch_description():
             )
         )
     )
-    lidar = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
+    lidar = Node(
+        package="lidar_sim",
+        executable="lidar_simulator_node",
+        name="lidar_simulator",
+        output="screen",
+        parameters=[
             PathJoinSubstitution(
-                [lidar_share, "launch", "lidar_simulator.launch.py"]
-            )
-        ),
-        launch_arguments={
-            "track_file": LaunchConfiguration("track_file")
-        }.items(),
+                [lidar_share, "config", "lidar_simulator.yaml"]
+            ),
+            {
+                "track_file": LaunchConfiguration("track_file"),
+                "fov_deg": ParameterValue(
+                    LaunchConfiguration("lidar_fov_deg"), value_type=float
+                ),
+                "max_range": ParameterValue(
+                    LaunchConfiguration("lidar_max_range"), value_type=float
+                ),
+                "enable_occlusion": ParameterValue(
+                    LaunchConfiguration("lidar_enable_occlusion"),
+                    value_type=bool,
+                ),
+            },
+        ],
     )
 
     # INS feeds the default KISS-ICP + EKF localization chain.  It remains
@@ -359,6 +373,31 @@ def generate_launch_description():
                 "track_file",
                 default_value=default_track,
                 description="Track YAML path or installed track name.",
+            ),
+            DeclareLaunchArgument(
+                "lidar_fov_deg",
+                default_value="360.0",
+                description=(
+                    "Requested horizontal LiDAR field of view in degrees. "
+                    "The bundled track_loader may still apply its front gate."
+                ),
+            ),
+            DeclareLaunchArgument(
+                "lidar_enable_occlusion",
+                default_value="true",
+                choices=["true", "false"],
+                description=(
+                    "Enable per-cone line-of-sight occlusion to reject cones "
+                    "hidden by nearby track boundaries."
+                ),
+            ),
+            DeclareLaunchArgument(
+                "lidar_max_range",
+                default_value="20.0",
+                description=(
+                    "Maximum simulated LiDAR range in metres. The default "
+                    "matches lidar_detection.max_detection_range."
+                ),
             ),
             DeclareLaunchArgument(
                 "mission_mode",
