@@ -35,7 +35,7 @@
 | `/system/mission_complete` | `std_msgs/msg/Bool` | controller | mission_manager | Skidpad 在固定 25 m 出口或 Acceleration 在终点线后 100 m 停止区末端停车后一次发布 `true`；mission_manager 据此进入 FINISH；depth 10 |
 | `/control/target_viz` | `visualization_msgs/msg/MarkerArray` | controller | RViz | 有订阅者时；depth 10 |
 | `/system/mission_state` | `wuta_msgs/msg/MissionState` | mission_manager | 规划/控制/定位/NDT/map_saver、simulation_bridge | **唯一发布者**；10 Hz；depth 10 |
-| `/system/lap_count` | `std_msgs/msg/UInt32` | mission_manager | path_generator、track_truth_map_publisher、simulation_bridge | 由定位位姿穿越正式起终线生成；Reliable + Transient Local；第三圈后 FINISH |
+| `/system/lap_count` | `std_msgs/msg/UInt32` | mission_manager | cone_map_builder、path_generator、track_truth_map_publisher、simulation_bridge | 由定位位姿穿越正式起终线生成；Reliable + Transient Local；builder 在首个正式建图圈后冻结地图，第三圈后 FINISH |
 | `/system/start_command` | `std_msgs/msg/Bool` | simulation_bridge（`auto_start=true`）或外部；实车 CAN 接口待实现 | mission_manager | 仿真出发输入；`true` 使 READY 进入 EXPLORE；depth 10 |
 | `/clicked_point` | `geometry_msgs/msg/PointStamped` | RViz Publish Point | simulation_bridge | `manual_ready=true` 时，一次点击锁存人工就绪并使 bridge 发布 ready；depth 10 |
 | `/system/lap_time` | `std_msgs/msg/Float64` | simulation_bridge | RViz/记录工具 | 仿真真值跨线用时；仅用于成绩和正式圈次对照，不控制 Trackdrive 状态机 |
@@ -148,8 +148,8 @@ KISS-ICP 的 `lidar_odom_frame=odom`、`base_frame=base_link`，且
 | track_truth_map_publisher | `track_file`、`map_topic`、`visualization_topic`、`map_frame`（string）；`mapping_laps`（int）、`publish_rate_hz`（double） | 将 YAML 锥桶坐标/颜色转换为 ConeMap，模拟相机提供正确颜色；达到正式建图圈数后闭环，不发布 YAML 中心线 |
 | simulated_cone_colorizer | `track_file`、`input_topic`、`output_topic`、`ground_truth_topic`（string）；`max_match_distance`、`max_pose_age_sec`、`lidar_offset_x/y`（double）；`pose_history_size`（int） | 仅模拟颜色模式启动；按时间戳真值位姿匹配 YAML 锥桶并只复制颜色，不生成地图或中心线 |
 | lidar_detection_node | `detector_type`、topic 名、地面/体素/聚类/几何阈值、`model_path` | `config/lidar_detection.yaml` |
-| cone_map_builder | `merge_distance`、`min_hit_count`、闭环阈值、`assign_colors`、`map_save_path`、`tf_lookup_timeout_sec`、`pending_detection_timeout_sec`、`max_pending_detections`、`use_latest_tf_fallback` | `config/cone_map_builder.yaml`；默认只使用检测采样时刻 TF，缺失时排队重试 |
-| boundary_detector_node | 局部 lookahead/配对/Delaunay 参数；全局宽度、去重、最大段长/闭合距离、最小点数/覆盖率 | 只根据 ConeMap 与定位生成中心线；闭环后生成一次有序环线并冻结，发布 ready/置信度；不读取 YAML 中心线 |
+| cone_map_builder | `merge_distance`、`consolidation_distance`、`min_hit_count`、`mapping_laps`、几何闭环阈值、`assign_colors`、`map_save_path`、`tf_lookup_timeout_sec`、`pending_detection_timeout_sec`、`max_pending_detections`、`use_latest_tf_fallback` | `config/cone_map_builder.yaml`；每帧执行收敛轨迹去重，正式圈次闭图且保留几何兜底；默认只使用检测采样时刻 TF，缺失时排队重试 |
+| boundary_detector_node | 局部 lookahead/配对/Delaunay 参数；全局宽度、去重、几何邻域/切向一致性、最大段长/闭合距离、最小点数/覆盖率 | 只根据 ConeMap 与定位生成中心线；闭环后优先按颜色配对，失败时使用局部切向筛选横跨赛道锥桶对，再以同一质量门槛验收并冻结；不读取 YAML 中心线 |
 | path_generator_node | Trackdrive 第一圈/第二圈/第三圈速度、曲率、全局前视段、短路径、可见距离、置信度与定位超时参数；其他赛项参数 | 第一圈 7 m/s 上限，RACE 两圈 9/10 m/s；冻结环线切片后取曲率、可见距离、路径/定位置信度的最低速度上限 |
 | controller_node | 车辆几何、Pure Pursuit lookahead/连续进度窗口、`skidpad_lookahead=3.0 m`、`trackdrive_lookahead=5.0 m`、Trackdrive 目标丢失保持参数、`control_rate_hz`、`max_steering_rate_deg_s`、Skidpad 完成位置/速度阈值 | `config/controller.yaml`；Skidpad 和 Trackdrive 使用各自固定前视；Trackdrive 从前视点读取曲率速度，Skidpad/Acceleration 从单调路径进度读取速度；转向输出按速率限制抑制定位噪声引起的抖动 |
 | mission_manager | 地图质量、定位质量/超时、正式圈数、起终线距离/用时/宽度/航向、`use_ndt_race_localization` | 唯一发布 MissionState 和正式圈次；五项门槛通过后 RACE，第三圈后 FINISH |

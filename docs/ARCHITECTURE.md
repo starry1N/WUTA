@@ -57,6 +57,7 @@ graph TD
   MM -->|/system/mission_state| BD
   BD -->|/planning/centerline| PG[path_generator_node]
   BD -->|/planning/global_centerline_ready, /planning/path_confidence| MM
+  MM -->|/system/lap_count| CMB
   MM -->|/system/lap_count| PG
   MM -->|/system/mission_state| PG
   PG -->|/planning/final_waypoints| CTRL[controller_node]
@@ -87,8 +88,8 @@ graph TD
 | `simulated_cone_colorizer` | `simulator_bringup` | 仅 `use_track_truth_map=false` 且 `use_simulated_cone_colors=true` | 按检测时间戳和真值位姿匹配 YAML 锥桶，只把正确颜色赋给 LiDAR 检测；不发布坐标、地图或中心线 |
 | `simulation_bridge` | `simulator_bringup` | 是 | 就绪、仿真开始输入、真值单圈对照计时、LiDAR→命令延迟、真值调试 pose/TF 与状态可视化；关闭真值定位时不注册 pose/TF 发布端点；不拥有 Trackdrive 圈次或 MissionState |
 | `lidar_detection_node` | `lidar_detection` | 是（`launch_fsd`） | PCL/DL 检测；`/hesai/pandar` → `/perception/lidar/cones`、可视化 |
-| `cone_map_builder_node` | `cone_map_builder` | 是（`launch_fsd`） | TF 变换、去重/闭环；检测与 pose → `/mapping/cone_map` |
-| `boundary_detector_node` | `boundary_detector` | 是（`launch_fsd`） | EXPLORE 局部中心线；闭环后从蓝黄锥配对、排序并冻结全局中心线，同时发布路径置信度 |
+| `cone_map_builder_node` | `cone_map_builder` | 是（`launch_fsd`） | 精确时间 TF 变换、在线轨迹去重、颜色融合；检测、pose 与正式圈次 → 闭合 `/mapping/cone_map` |
+| `boundary_detector_node` | `boundary_detector` | 是（`launch_fsd`） | EXPLORE 局部中心线；闭环后优先从蓝黄锥配对，少量侧别错误时以局部边界切向筛选横跨赛道锥桶对，排序验收并冻结全局中心线 |
 | `path_generator_node` | `path_generator` | 是（`launch_fsd`） | Trackdrive 从冻结环线切取 40 m 前视段，按圈次、曲率、可见距离和置信度限速；Skidpad 固定四圈+25 m 退出路径 |
 | `controller_node` | `controller` | 是（`launch_fsd`） | 带单调路径进度的 Pure Pursuit 与限幅；Skidpad/Acceleration 停车后通知任务完成 |
 | `mission_manager_node` | `mission_manager` | 是（`launch_fsd`） | 唯一 MissionState 发布者；验证 RACE 门槛，用定位穿越有限起终线生成 `/system/lap_count`，第三圈后 FINISH |

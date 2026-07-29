@@ -91,6 +91,12 @@ ros2 topic echo /system/simulator_latency
 后者验证感知到建图的完整几何链路。两者都只是无相机仿真替代；接入真实相机后，应由
 `camera_detection`/`detection_fusion` 提供颜色。
 
+将 `use_simulated_cone_colors:=false` 时，传统 LiDAR 检测仍输出未知色，builder 以
+锥桶距离车辆最近的一次观测左右侧作为无相机兜底。该标签不是语义识别结果；闭环后如果
+少量侧别错误破坏蓝黄配对，`boundary_detector` 会从同一在线 ConeMap 的局部边界切向筛选
+横跨赛道锥桶对，并在原覆盖率与闭合距离门槛下生成全局中心线。两种在线模式的地图都会在
+正式 `/system/lap_count=1` 时冻结，几何回环检测作为提前到达或圈次话题异常时的兜底。
+
 默认请求 `lidar_fov_deg:=360.0`，把当前外部 `track_loader` 子模块允许的前向窗口扩到最大，
 保证急弯中两侧锥桶仍可见；该子模块目前仍有独立的车前方过滤，因此这还不等同于真实 Hesai
 128 的完整水平环视。需要复现更窄的前向传感器时可显式覆盖，例如 `lidar_fov_deg:=120.0`。

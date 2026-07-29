@@ -40,10 +40,12 @@ FSD 建图链路。
 检测器以高度阈值或 RANSAC 去地面、体素下采样、欧氏聚类，再以宽度/高度/距离筛选。
 `ConeMapBuilder` 以消息时间戳查询 `map <- sensor_frame`，在 `merge_distance` 内对坐标
 做命中次数加权平均；未确认锥筒在发布前由 `min_hit_count` 过滤。颜色可按车辆航向的
-左右叉积分配。达到最少确认数量、累计行驶阈值、起点距离和起点朝向条件后，地图闭环并
-保存 YAML。
-闭环冻结前会按同一 `merge_distance` 对同色或未知色兼容轨迹做传递式最终合并，处理
-独立轨迹均值在一圈内逐渐收敛后形成的重复堆叠；在线半径不扩大，避免误合并真实相邻锥桶。
+左右侧分配；上游相机/融合提供的语义颜色始终优先，未知色则采用距离最近的一次左右观测，
+避免远处相邻赛段的重复观测主导颜色。每个检测帧后按独立的
+`consolidation_distance` 对兼容轨迹做传递式合并，及时清除定位修正后逐渐收敛的重复堆叠；
+`min_hit_count=3` 再过滤短寿命候选。收到正式 `/system/lap_count` 达到
+`mapping_laps` 后地图冻结并保存 YAML；累计行驶、起点距离和朝向组成的几何回环检测保留为
+独立兜底。
 
 无相机仿真可启用 `use_simulated_cone_colors`。检测器先将无颜色 ConeArray 发布到
 `/perception/lidar/cones_raw`，`simulated_cone_colorizer` 使用同一采样时刻的真值位姿
@@ -57,7 +59,9 @@ FSD 建图链路。
 Trackdrive：EXPLORE 时，`BoundaryDetectorNode` 提取 lookahead 范围内的蓝/黄/未知锥筒，
 构建 Delaunay 图并搜索局部中点序列。`ConeMap.is_closed=true` 后，它仅从闭环锥桶地图配对
 蓝黄边界、按车辆初始航向排序并验收覆盖率/闭合距离/段长，成功后冻结有方向的全局中心线；
-不读取赛道 YAML 的 reference centerline。`PathGeneratorNode` 从冻结环线按连续进度切取 40 m
+若少量左右侧标签错误使彩色配对无法闭合，则从同一 ConeMap 估计锥桶边界局部切向，只保留
+近似垂直于两端切向的横跨赛道锥桶对，再执行相同的排序和质量门槛。该兜底不读取赛道 YAML
+或真值中心线。`PathGeneratorNode` 从冻结环线按连续进度切取 40 m
 前向路径，按三点曲率计算 `v=sqrt(lateral_accel_limit / |curvature|)`。第一、二、三圈默认
 速度上限依次为 7、9、10 m/s，且取前向可见距离、路径置信度和定位置信度形成的更低安全上限。
 Skidpad 按 `skidpad_start_*` 固定 map 参考生成：右环顺时针
