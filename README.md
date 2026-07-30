@@ -2,6 +2,71 @@
 
 WUTA 是一套基于 ROS 2 的自动驾驶仿真系统。主仓库负责统一启动和编排，核心算法与模拟器组件分别由 Git submodule 管理。
 
+## 已验证开发环境
+
+以下版本来自当前维护环境，用于团队复现构建；建议其他机器使用相同的 Ubuntu 与 ROS 发行版。Python 依赖由 Ubuntu/ROS 的 APT 包管理，当前系统未依赖 `pip`。
+
+| 项目 | 当前版本 / 要求 |
+| --- | --- |
+| 操作系统 | Ubuntu 22.04.5 LTS (Jammy) |
+| 内核 | Linux 6.8.0-136-generic |
+| ROS 2 | Humble（`ros-humble-ros-base` 0.10.0） |
+| Python | Python 3.10.12 |
+| CMake | 4.3.4 |
+| C++ 编译器 | GCC/G++ 11.4.0，按 C++17 构建 |
+| colcon | `python3-colcon-core` 0.21.0、`python3-colcon-common-extensions` 0.3.0 |
+| rosdep | `python3-rosdep` 0.26.0 |
+
+当前 Python 运行时已验证的包如下：
+
+| 包 | 版本 | 用途 |
+| --- | --- | --- |
+| `rclpy` | ROS Humble APT 包 | Python ROS 2 节点 |
+| `numpy` | 1.21.5 | LiDAR 仿真与数值计算 |
+| `PyYAML` (`yaml`) | 5.4.1 | 赛道与启动 YAML 配置 |
+| `scipy` | 1.8.0 | 仿真/分析数值工具 |
+| `matplotlib` | 3.5.1 | 离线轨迹与调试绘图 |
+| `pytest` | 6.2.5 | Python 单元测试 |
+| `setuptools` | 59.6.0 | `ament_python` 包安装 |
+
+FSD C++ 包还通过 `package.xml` 依赖 ROS Humble 的 `rclcpp`、`tf2_ros`、`robot_localization`、`pcl_conversions`、`Eigen3`、`yaml-cpp`、Boost、PCL、GeographicLib、TBB 和相关消息包。建议先安装 ROS 2 Humble Desktop/开发工具，再用 `rosdep` 根据源码清单安装目标机缺失依赖：
+
+```bash
+sudo rosdep init        # 仅首次需要
+rosdep update
+
+cd /path/to/WUTA
+rosdep install --from-paths WUTA-FSD/ros2_ws/src WUTA-SIM \
+  --ignore-src -r -y --rosdistro humble
+```
+
+在编译前可用下列命令核对关键工具；其中 `ros2` 不支持 `--version`，应通过 `ROS_DISTRO` 确认发行版：
+
+```bash
+source /opt/ros/humble/setup.bash
+echo "$ROS_DISTRO"      # 应输出 humble
+python3 --version
+cmake --version
+g++ --version
+colcon list
+```
+
+### Conda 环境（离线分析与 Python 测试）
+
+根目录的 [`environment.yml`](./environment.yml) 锁定了当前已验证的数值计算、绘图和测试依赖。它适用于轨迹/赛道分析及 `pytest`，可按以下方式创建：
+
+```bash
+conda env create -f environment.yml
+conda activate wuta-sim
+```
+
+不要通过 Conda 安装 `rclpy`、`tf2_ros`、PCL 或其他 ROS 2 二进制包；它们必须来自 Ubuntu 22.04 的 ROS Humble APT 安装。需要运行 `ros2 launch`、构建 C++ ROS 包或启动完整仿真时，建议退出该 Conda 环境并使用系统 Python：
+
+```bash
+conda deactivate
+source /opt/ros/humble/setup.bash
+```
+
 ## 目录结构
 
 | 路径 | 说明 | 分支 |
@@ -279,6 +344,11 @@ ros2 launch simulator_bringup simulator.launch.py \
 其他常用 launch 参数：`auto_start:=false` 停留在 `IDLE` 等待外部任务状态；`start_x:=auto`
 会在 Skidpad 自动选用 `-15 m`、其它赛项选用 `0 m`；可用 `wheel_base`、`max_steer_angle`
 和 `vehicle_dt` 覆盖车辆模型参数。
+
+LiDAR 可见性参数 `lidar_enable_occlusion:=true` 默认模拟锥筒之间的视线遮挡：在相近方位角上，
+近处锥筒会遮住远处锥筒。设为 `false` 时会忽略遮挡，FOV 和量程内的锥筒都会进入
+`/hesai/pandar`，适合隔离验证规划/控制；它不影响 `map` 坐标系下的静态真值地图
+`/sim/lidar/track_cones`。
 
 ### 启动默认参数配置
 

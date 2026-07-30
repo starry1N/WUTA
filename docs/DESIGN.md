@@ -71,7 +71,9 @@ Skidpad 按 `skidpad_start_*` 固定 map 参考生成：右环顺时针
 比例的 lookahead 选择目标点，Pure Pursuit 计算命令，`TwistFilter` 再执行车辆约束/安全
 过滤。Trackdrive 默认使用受限动态前视：检查车辆前方 12 m 局部中心线曲率，直线保持
 `trackdrive_lookahead=5.0 m`，高曲率弯道平滑缩短至 `trackdrive_min_lookahead=3.0 m`，且不以规划目标速度为输入；
-前视距离再按 `trackdrive_lookahead_rate_limit=3.0 m/s` 限制变化。短暂失去前向目标时以低速保留上一有效命令，
+前视距离再按 `trackdrive_lookahead_rate_limit=3.0 m/s` 限制变化。首个有效前向目标出现后，控制器以
+`trackdrive_start_speed=3.0 m/s` 固定目标速度持续 `trackdrive_start_speed_duration=4.0 s`，使初始在线建图和
+局部中心线稳定；该阶段结束后再采用前视点的曲率速度。短暂失去前向目标时以低速保留上一有效命令，
 超时后停车；Acceleration 保持动态前视。Skidpad 专用 `skidpad_lookahead=3.0 m` 覆盖通用动态前视（5 m/s 下原本为 10 m）：
 圆的半径仅 9.125 m，10 m 前视会跨越交叉点的曲率切换，从而在第一/三圈切入内侧、或在第四圈
 出口过早卸载转向。自交叉 Skidpad 路径通过单调前向进度索引保持圈序；零速终点只有在车辆

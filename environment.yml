@@ -1,0 +1,14 @@
+name: wuta-sim
+channels:
+  - conda-forge
+dependencies:
+  # Keep the Conda interpreter compatible with ROS 2 Humble on Ubuntu 22.04.
+  - python=3.10
+  # Versions verified in the maintainer's current development environment.
+  - numpy=1.21.5
+  - pyyaml=5.4.1
+  - scipy=1.8.0
+  - matplotlib=3.5.1
+  - pytest=6.2.5
+  - setuptools=59.6.0
+  - pip
