@@ -36,9 +36,12 @@ git submodule update --init --recursive
 | NDT/保存地图 | `WUTA-FSD/ros2_ws/src/localization/ndt_localization/config/ndt_localization.yaml` |
 | RViz | `WUTA-SIM/simulator_bringup/rviz/wuta_simulator.rviz` |
 
-`start_simulator.sh` 会把仓库根目录作为赛道名解析基准，因此默认的 `track_file: track2`
-可同时被 LiDAR 模拟器和模拟颜色节点解析。直接使用 `ros2 launch` 时可传绝对 YAML 路径；
-标准 Trackdrive 仍可用 `track_file:=trackdrive` 覆盖。
+赛道名不是以仓库根目录优先解析：LiDAR 和真值地图/颜色节点都会先查已安装的
+`lidar_sim/tracks/`；LiDAR 随后查其源码 `tracks/` 与当前目录 `tracks/`，后两个
+simulator_bringup 节点则随后查 `WUTA_ROOT/tracks/` 与当前目录 `tracks/`。因此需要明确
+选择根目录或新建赛道版本时，必须传入绝对 YAML 路径，例如
+`track_file:=${WUTA_ROOT}/tracks/track2.yaml`；不要依赖同名文件的搜索优先级。标准
+Trackdrive 仍可用 `track_file:=trackdrive` 覆盖。
 
 部署前为真实硬件复核 frame、话题名、QoS、LiDAR 外参和 EKF 输入。NDT 默认地图路径为
 `/tmp/wuta_lidar_map.pcd`；锥筒地图保存默认 `/tmp/wuta_cone_map.yaml`，应替换为有权限且
