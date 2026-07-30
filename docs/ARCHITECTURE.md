@@ -36,7 +36,9 @@ graph TD
   LS -->|/hesai/pandar| KISS[kiss_icp_node]
   LS -->|scan stamp| SB
   VM -->|timestamped pose| SCC[simulated_cone_colorizer]
-  KISS -->|/kiss/odometry| EKF[ekf_node]
+  KISS -->|/kiss/odometry| KG[kiss_odom_gate_node]
+  INS -->|/cg410/odometry| KG
+  KG -->|/kiss/odometry_gated| EKF[ekf_node]
   INS -->|/cg410/odometry| EKF
   EKF -->|/odometry/filtered| LM[localization_manager]
   LM -->|/localization/pose| CMB[cone_map_builder]
@@ -95,6 +97,7 @@ graph TD
 | `mission_manager_node` | `mission_manager` | 是（`launch_fsd`） | 唯一 MissionState 发布者；验证 RACE 门槛，用定位穿越有限起终线生成 `/system/lap_count`，第三圈后 FINISH |
 | `localization_manager_node` | `localization_manager` | 是（`launch_localization=true` 且未启用真值定位） | EKF/NDT 位姿源切换；发布 `/localization/pose`、ready 与协方差派生的定位置信度 |
 | `kiss_icp_node` | KISS-ICP ROS package | 是（`launch_localization=true` 且未启用真值定位） | 点云 → `/kiss/odometry`；TF 由 EKF 单独发布 |
+| `kiss_odom_gate_node` | `kiss_icp_wrapper` | 是（随 localization launch） | 以 INS 角速度、时间戳和帧间运动一致性门控 KISS；发布 `/kiss/odometry_gated` 给 EKF |
 | `ndt_localization_node` | `ndt_localization` | 否 | PCL NDT 匹配；点云、初始位姿、状态 → `/ndt/pose`、路径 |
 | `map_saver_node` | `ndt_localization` | 否 | 探索阶段累积/下采样点云并保存 PCD；点云、KISS odom、状态 → `/ndt/map_ready` |
 | `ekf_node` / `ukf_node` / `navsat_transform_node` / `robot_localization_listener_node` | `robot_localization`（源码依赖） | 仅 `ekf_node` 是（`launch_localization=true` 且未启用真值定位） | 第三方滤波、地理坐标转换和监听工具 |

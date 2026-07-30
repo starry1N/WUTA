@@ -45,7 +45,9 @@
 | `/system/localization_ready` | `std_msgs/msg/Bool` | localization_manager（默认）或 simulation_bridge（真值回退） | mission_manager | 随定位输出；depth 10 |
 | `/system/localization_confidence` | `std_msgs/msg/Float32` | localization_manager（默认）或 simulation_bridge（真值回退） | mission_manager、path_generator | 协方差派生或真值调试置信度 `[0,1]`；depth 10 |
 | `/odometry/filtered` | `nav_msgs/msg/Odometry` | robot_localization `ekf_node` | localization_manager | 默认融合输出；50 Hz；`odom` frame |
-| `/kiss/odometry` | `nav_msgs/msg/Odometry` | `kiss_icp_node` | `ekf_node`、map_saver | 默认约 10 Hz；`odom` frame；KISS 不发布 TF |
+| `/kiss/odometry` | `nav_msgs/msg/Odometry` | `kiss_icp_node` | `kiss_odom_gate_node`、map_saver | 默认约 10 Hz；`odom` frame；KISS 不发布 TF |
+| `/kiss/odometry_gated` | `nav_msgs/msg/Odometry` | `kiss_odom_gate_node` | `ekf_node` | 低角速度且 INS 时间戳新鲜、帧间运动一致时转发；连续弯或不一致时不发布 |
+| `/localization/kiss_gate_active` | `std_msgs/msg/Bool` | `kiss_odom_gate_node` | 调试工具 | 门控状态改变时发布；`true` 表示 KISS 增量正在进入 EKF |
 | `/ndt/pose` | `geometry_msgs/msg/PoseStamped` | ndt_localization | localization_manager | NDT 激活时；depth 10 |
 | `/ndt/path` | `nav_msgs/msg/Path` | ndt_localization | 工具/RViz | NDT 激活时；depth 10 |
 | `/ndt/aligned_cloud` | `sensor_msgs/msg/PointCloud2` | ndt_localization | 工具/RViz | 有订阅者时；depth 10 |
@@ -153,7 +155,8 @@ KISS-ICP 的 `lidar_odom_frame=odom`、`base_frame=base_link`，且
 | path_generator_node | Trackdrive 第一圈/第二圈/第三圈速度、曲率、全局前视段、短路径、可见距离、置信度与定位超时参数；其他赛项参数 | 第一圈 7 m/s 上限，RACE 两圈 9/10 m/s；冻结环线切片后取曲率、可见距离、路径/定位置信度的最低速度上限 |
 | controller_node | 车辆几何、Pure Pursuit lookahead/连续进度窗口、`skidpad_lookahead=3.0 m`、`trackdrive_dynamic_lookahead`、Trackdrive 3–5 m 曲率前视及目标丢失保持参数、`control_rate_hz`、`max_steering_rate_deg_s`、Skidpad 完成位置/速度阈值 | `config/controller.yaml`；Skidpad 固定前视；Trackdrive 从前方 12 m 中心线估计曲率，在 3–5 m 间按变化率限制调整前视，且不随规划速度变化。Trackdrive 从前视点读取曲率速度，Skidpad/Acceleration 从单调路径进度读取速度；转向输出按速率限制抑制定位噪声引起的抖动 |
 | mission_manager | 地图质量、定位质量/超时、正式圈数、起终线距离/用时/宽度/航向、`use_ndt_race_localization` | 唯一发布 MissionState 和正式圈次；五项门槛通过后 RACE，第三圈后 FINISH |
-| ekf_node | `odom0/odom1` 配置、`odom0_pose_rejection_threshold=3.0`、`odom1_pose_rejection_threshold=5.0`、过程噪声 | `localization_manager/config/ekf.yaml`；KISS 的显式 3σ 创新门限拒绝重复赛段的错误重定位，INS 保留较宽的 5σ 绝对定位门限 |
+| ekf_node | `odom0/odom1` 配置、`odom0_differential=true`、KISS 3σ pose/twist 门限、INS 5σ pose 门限、过程噪声 | `localization_manager/config/ekf.yaml`；KISS 只作为差分局部运动，INS 保持绝对 map 锚点；创新门限拒绝重复赛段错误重定位与连续弯配准异常 |
+| kiss_odom_gate_node | `kiss_input_topic`、`gated_output_topic`、`ins_topic`、`max_abs_yaw_rate=0.20`、`ins_timeout_sec=0.20`、`recovery_hold_time_sec=1.0`、`max_motion_disagreement=0.35`、`max_yaw_disagreement=0.15` | `localization_manager/launch/localization.launch.py`；高角速度时阻断 KISS，恢复后只发连续且与 INS 帧间运动一致的增量，避免阻断窗口累积为 EKF 跳变 |
 | localization_manager | 无显式声明参数 | 默认定位集成；通过固定话题与 MissionState 选源 |
 | ndt_localization / map_saver | 地图路径、NDT/体素参数、累积距离 | `config/ndt_localization.yaml` |
 | kiss_icp_node | frame/TF、协方差、范围、体素、阈值、迭代参数 | `kiss_icp_wrapper/config/kiss_icp_hesai128.yaml` |

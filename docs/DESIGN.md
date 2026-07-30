@@ -82,9 +82,12 @@ Skidpad 按 `skidpad_start_*` 固定 map 参考生成：右环顺时针
 
 `ins_simulator` 默认以 20 Hz 缓存 `/sim/ground_truth`，向位置、yaw、速度和角速度注入
 可配置高斯噪声及协方差，再发布 `/cg410/odometry`。KISS-ICP 将 `/hesai/pandar` 注册为
-`/kiss/odometry`；其 `lidar_odom_frame=odom` 且不发布 TF。EKF 融合这两路 Odometry，发布
-`/odometry/filtered` 和唯一的动态 `odom -> base_link`。`odom0`（KISS）使用 3σ pose 创新拒绝门限，
-`odom1`（INS）使用 5σ 门限；这是防止 Trackdrive 重复锥桶几何使 KISS 错误重定位后将大位姿跳变注入 EKF 的必要保护。bringup 另发布静态同原点
+`/kiss/odometry`；其 `lidar_odom_frame=odom` 且不发布 TF。`kiss_odom_gate_node` 使用 INS
+角速度门控 KISS：仅在 `|yaw_rate|<=0.20 rad/s`、INS 时间戳新鲜且稳定 1 s 后转发连续、经
+帧间位移/航向一致性校验的 `/kiss/odometry_gated`。连续弯时它重置原始 KISS 基线而不输出，避免
+恢复后将被阻断区间的 KISS 绝对 pose 差变成一次巨大差分速度。EKF 将门控后的 KISS 作为差分局部运动
+（`odom0_differential=true`），而 INS 保持绝对 map 位置和航向，发布 `/odometry/filtered` 和唯一的动态
+`odom -> base_link`。KISS 使用 3σ pose/twist 创新拒绝门限，INS 使用 5σ pose 门限；这可防止连续弯道的局部 KISS 配准偏差作为全局位姿持续累积，或错误重定位后将大跳变注入 EKF。bringup 另发布静态同原点
 `map -> odom` 与 `base_link -> lidar`，避免 TF 发布者冲突。`LocalizationManager` 在
 `LOC_KISS_ICP` 时将 `/odometry/filtered` 转为 `/localization/pose`，在 `LOC_NDT` 时接受
 `/ndt/pose`。`use_ground_truth_localization:=true` 是调试回退，不应与默认 EKF TF 并用。
