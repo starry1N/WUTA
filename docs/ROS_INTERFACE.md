@@ -20,7 +20,7 @@
 | `/cg410/odometry` | `nav_msgs/msg/Odometry` | `ins_simulator` | `ekf_node` | 默认启动，20 Hz；depth 20；`map` frame |
 | `/localization/pose` | `geometry_msgs/msg/PoseStamped` | `localization_manager`（默认）或 simulation_bridge（真值回退） | 建图/规划/控制 | 随 EKF 输出；bridge 仅在 `use_ground_truth_localization=true` 时注册发布器；depth 10 |
 | `/perception/lidar/cones_raw` | `wuta_msgs/msg/ConeArray` | lidar_detection（仅模拟颜色模式） | simulated_cone_colorizer | 随点云；保留原检测坐标和采样时间；depth 10 |
-| `/perception/lidar/cones` | `wuta_msgs/msg/ConeArray` | 默认 lidar_detection；模拟颜色模式为 simulated_cone_colorizer | cone_map_builder | 随点云；模拟颜色模式只改 `color`，两种发布路径互斥；depth 10 |
+| `/perception/lidar/cones` | `wuta_msgs/msg/ConeArray` | 默认 lidar_detection；模拟颜色模式为 simulated_cone_colorizer；未来相机融合待实现 | cone_map_builder | 随点云；模拟颜色模式只改 `color`，两种发布路径互斥；未来相机融合应向既有消息填充稳定蓝/黄 `color`，不新增真值中心线接口；depth 10 |
 | `/perception/lidar/cones_viz` | `visualization_msgs/msg/MarkerArray` | lidar_detection | RViz | 有订阅者时；转换到 `map` 后发布；使用采样时间；depth 10 |
 | `/mapping/cone_map` | `wuta_msgs/msg/ConeMap` | 默认 `cone_map_builder`；`use_track_truth_map=true` 时 `track_truth_map_publisher` | boundary_detector、mission_manager | 5 Hz；builder 为 Reliable + Volatile、depth 10，真值快捷模式为 Reliable + Transient Local、depth 1；两种模式互斥 |
 | `/mapping/cone_map_viz` | `visualization_msgs/msg/MarkerArray` | 默认 cone_map_builder；`use_track_truth_map=true` 时 track_truth_map_publisher | RViz | 5 Hz；builder 为 Reliable + Volatile、depth 10，真值快捷模式为 Reliable + Transient Local、depth 1；按算法输入渲染蓝/黄/橙锥桶 |
@@ -148,7 +148,7 @@ KISS-ICP 的 `lidar_odom_frame=odom`、`base_frame=base_link`，且
 | lidar_simulator | topic/frame 名（string）、`publish_rate_hz`/FOV/范围/噪声（double）、点数（int）、开关（bool） | `config/lidar_simulator.yaml` |
 | simulation_bridge | `ground_truth_topic`、`map_frame`、`base_frame`、`mission_mode_cmd`（string）；`publish_start_command`、`publish_truth_localization`、`manual_ready`（bool）；`timing_min_lap_duration`（double）、`trackdrive_finish_laps`（int） | 提供仿真就绪/GO/急停/车检输入、真值计时、延迟、真值定位调试和状态显示；订阅正式圈次用于对照，Trackdrive 完成权属于 mission_manager |
 | track_truth_map_publisher | `track_file`、`map_topic`、`visualization_topic`、`map_frame`（string）；`mapping_laps`（int）、`publish_rate_hz`（double） | 将 YAML 锥桶坐标/颜色转换为 ConeMap，模拟相机提供正确颜色；达到正式建图圈数后闭环，不发布 YAML 中心线 |
-| simulated_cone_colorizer | `track_file`、`input_topic`、`output_topic`、`ground_truth_topic`（string）；`max_match_distance`、`max_pose_age_sec`、`lidar_offset_x/y`（double）；`pose_history_size`（int） | 仅模拟颜色模式启动；按时间戳真值位姿匹配 YAML 锥桶并只复制颜色，不生成地图或中心线 |
+| simulated_cone_colorizer | `track_file`、`input_topic`、`output_topic`、`ground_truth_topic`（string）；`max_match_distance`、`max_pose_age_sec`、`lidar_offset_x/y`（double）；`pose_history_size`（int） | 仅模拟颜色模式启动；按时间戳真值位姿匹配 YAML 锥桶并只复制颜色，不生成地图或中心线。实车对应能力为**待实现**的相机锥桶检测/融合：应复用既有 `ConeArray` 颜色字段，避免紧凑赛道中无颜色 Delaunay 的跨段歧义 |
 | lidar_detection_node | `detector_type`、topic 名、地面/体素/聚类/几何阈值、`model_path` | `config/lidar_detection.yaml` |
 | cone_map_builder | `merge_distance`、`consolidation_distance`、`min_hit_count`、`mapping_laps`、几何闭环阈值、`assign_colors`、`map_save_path`、`tf_lookup_timeout_sec`、`pending_detection_timeout_sec`、`max_pending_detections`、`localization_jump_threshold`、`localization_jump_cooldown_sec`、`use_latest_tf_fallback` | `config/cone_map_builder.yaml`；每帧以最近兼容轨迹关联，并记录同帧共视的真实近邻；定位跳变时清空待处理检测并暂停融合；在线去重只合并从未共视的轨迹，正式圈次闭图且保留几何兜底；默认只使用检测采样时刻 TF，缺失时排队重试 |
 | boundary_detector_node | 局部 lookahead/配对/Delaunay 参数；全局宽度、去重、几何邻域/切向一致性、最大段长/闭合距离、最小点数/覆盖率 | 只根据 ConeMap 与定位生成中心线；闭环后优先按颜色配对，失败时使用局部切向筛选横跨赛道锥桶对，再以同一质量门槛验收并冻结；不读取 YAML 中心线 |
