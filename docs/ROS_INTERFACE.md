@@ -22,8 +22,8 @@
 | `/perception/lidar/cones_raw` | `wuta_msgs/msg/ConeArray` | lidar_detection（仅模拟颜色模式） | simulated_cone_colorizer | 随点云；保留原检测坐标和采样时间；depth 10 |
 | `/perception/lidar/cones` | `wuta_msgs/msg/ConeArray` | 默认 lidar_detection；模拟颜色模式为 simulated_cone_colorizer | cone_map_builder | 随点云；模拟颜色模式只改 `color`，两种发布路径互斥；depth 10 |
 | `/perception/lidar/cones_viz` | `visualization_msgs/msg/MarkerArray` | lidar_detection | RViz | 有订阅者时；转换到 `map` 后发布；使用采样时间；depth 10 |
-| `/mapping/cone_map` | `wuta_msgs/msg/ConeMap` | 默认 `cone_map_builder`；`use_track_truth_map=true` 时 `track_truth_map_publisher` | boundary_detector、mission_manager | 5 Hz、Reliable + Transient Local；两种模式互斥 |
-| `/mapping/cone_map_viz` | `visualization_msgs/msg/MarkerArray` | 默认 cone_map_builder；`use_track_truth_map=true` 时 track_truth_map_publisher | RViz | 5 Hz；真值快捷模式为 Reliable + Transient Local；按算法输入渲染蓝/黄/橙锥桶 |
+| `/mapping/cone_map` | `wuta_msgs/msg/ConeMap` | 默认 `cone_map_builder`；`use_track_truth_map=true` 时 `track_truth_map_publisher` | boundary_detector、mission_manager | 5 Hz；builder 为 Reliable + Volatile、depth 10，真值快捷模式为 Reliable + Transient Local、depth 1；两种模式互斥 |
+| `/mapping/cone_map_viz` | `visualization_msgs/msg/MarkerArray` | 默认 cone_map_builder；`use_track_truth_map=true` 时 track_truth_map_publisher | RViz | 5 Hz；builder 为 Reliable + Volatile、depth 10，真值快捷模式为 Reliable + Transient Local、depth 1；按算法输入渲染蓝/黄/橙锥桶 |
 | `/planning/centerline` | `autoware_msgs/msg/Lane` | boundary_detector | path_generator | EXPLORE 为局部中心线；闭环验收后为冻结的有序全局中心线；depth 10 |
 | `/planning/centerline_viz` | `visualization_msgs/msg/MarkerArray` | boundary_detector | RViz | 有订阅者时；depth 10 |
 | `/planning/global_centerline_ready` | `std_msgs/msg/Bool` | boundary_detector | mission_manager、path_generator | 全局中心线验收结果；Reliable + Transient Local |

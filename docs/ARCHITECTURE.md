@@ -82,22 +82,22 @@ graph TD
 | `vehicle_model` | `vehicle_model` | 是 | 自行车模型；`/control/command` → `/sim/ground_truth` |
 | `can_simulator` | `can_simulator` | 是 | 从仿真里程计复制速度；`/sim/ground_truth` → `/localization/velocity` |
 | `can_interface` | `can_interface`（FSD 源码预留目录） | 否，且当前不可编译 | 规划中的实车 VCU/CAN 适配；目标是 CAN → 任务控制/车速、MissionState/车检结果 → CAN；当前没有 `package.xml`/`CMakeLists.txt`，不能视作运行节点 |
-| `ins_simulator` | `ins_simulator` submodule | 是 | 真值加噪的 CG-410 适配；`/sim/ground_truth` → `/cg410/odometry` |
+| `ins_simulator` | `ins_simulator` submodule | 是（`launch_ins=true` 且未启用真值定位） | 真值加噪的 CG-410 适配；`/sim/ground_truth` → `/cg410/odometry` |
 | `lidar_simulator` | `lidar_sim` | 是 | YAML 赛道/车辆位姿生成点云与真值 marker；`/sim/ground_truth` → `/hesai/pandar`、`/sim/lidar/*` |
-| `track_truth_map_publisher` | `simulator_bringup` | 仅 `use_track_truth_map=true` | 将 YAML 锥桶坐标和正确颜色转换为 `/mapping/cone_map`，模拟相机提供可靠颜色；正式首圈完成后置 `is_closed=true`，但不发布 YAML 中心线 |
-| `simulated_cone_colorizer` | `simulator_bringup` | 仅 `use_track_truth_map=false` 且 `use_simulated_cone_colors=true` | 按检测时间戳和真值位姿匹配 YAML 锥桶，只把正确颜色赋给 LiDAR 检测；不发布坐标、地图或中心线 |
+| `track_truth_map_publisher` | `simulator_bringup` | 仅 `launch_fsd=true` 且 `use_track_truth_map=true` | 将 YAML 锥桶坐标和正确颜色转换为 `/mapping/cone_map`，模拟相机提供可靠颜色；正式首圈完成后置 `is_closed=true`，但不发布 YAML 中心线 |
+| `simulated_cone_colorizer` | `simulator_bringup` | 仅 `launch_fsd=true`、`use_track_truth_map=false` 且 `use_simulated_cone_colors=true` | 按检测时间戳和真值位姿匹配 YAML 锥桶，只把正确颜色赋给 LiDAR 检测；不发布坐标、地图或中心线 |
 | `simulation_bridge` | `simulator_bringup` | 是 | 就绪、仿真开始输入、真值单圈对照计时、LiDAR→命令延迟、真值调试 pose/TF 与状态可视化；关闭真值定位时不注册 pose/TF 发布端点；不拥有 Trackdrive 圈次或 MissionState |
-| `lidar_detection_node` | `lidar_detection` | 是（`launch_fsd`） | PCL/DL 检测；`/hesai/pandar` → `/perception/lidar/cones`、可视化 |
-| `cone_map_builder_node` | `cone_map_builder` | 是（`launch_fsd`） | 精确时间 TF 变换、在线轨迹去重、颜色融合；检测、pose 与正式圈次 → 闭合 `/mapping/cone_map` |
+| `lidar_detection_node` | `lidar_detection` | 是（`launch_fsd=true` 且 `use_track_truth_map=false`） | PCL/DL 检测；`/hesai/pandar` → `/perception/lidar/cones`、可视化 |
+| `cone_map_builder_node` | `cone_map_builder` | 是（`launch_fsd=true` 且 `use_track_truth_map=false`） | 精确时间 TF 变换、在线轨迹去重、颜色融合；检测、pose 与正式圈次 → 闭合 `/mapping/cone_map` |
 | `boundary_detector_node` | `boundary_detector` | 是（`launch_fsd`） | EXPLORE 局部中心线；闭环后优先从蓝黄锥配对，少量侧别错误时以局部边界切向筛选横跨赛道锥桶对，排序验收并冻结全局中心线 |
 | `path_generator_node` | `path_generator` | 是（`launch_fsd`） | Trackdrive 从冻结环线切取 40 m 前视段，按圈次、曲率、可见距离和置信度限速；Skidpad 固定四圈+25 m 退出路径 |
 | `controller_node` | `controller` | 是（`launch_fsd`） | 带单调路径进度的 Pure Pursuit 与限幅；Skidpad/Acceleration 停车后通知任务完成 |
 | `mission_manager_node` | `mission_manager` | 是（`launch_fsd`） | 唯一 MissionState 发布者；验证 RACE 门槛，用定位穿越有限起终线生成 `/system/lap_count`，第三圈后 FINISH |
-| `localization_manager_node` | `localization_manager` | 是（`launch_localization`） | EKF/NDT 位姿源切换；发布 `/localization/pose`、ready 与协方差派生的定位置信度 |
-| `kiss_icp_node` | KISS-ICP ROS package | 是（`launch_localization`） | 点云 → `/kiss/odometry`；TF 由 EKF 单独发布 |
+| `localization_manager_node` | `localization_manager` | 是（`launch_localization=true` 且未启用真值定位） | EKF/NDT 位姿源切换；发布 `/localization/pose`、ready 与协方差派生的定位置信度 |
+| `kiss_icp_node` | KISS-ICP ROS package | 是（`launch_localization=true` 且未启用真值定位） | 点云 → `/kiss/odometry`；TF 由 EKF 单独发布 |
 | `ndt_localization_node` | `ndt_localization` | 否 | PCL NDT 匹配；点云、初始位姿、状态 → `/ndt/pose`、路径 |
 | `map_saver_node` | `ndt_localization` | 否 | 探索阶段累积/下采样点云并保存 PCD；点云、KISS odom、状态 → `/ndt/map_ready` |
-| `ekf_node` / `ukf_node` / `navsat_transform_node` / `robot_localization_listener_node` | `robot_localization`（源码依赖） | 仅 `ekf_node` 是（`launch_localization`） | 第三方滤波、地理坐标转换和监听工具 |
+| `ekf_node` / `ukf_node` / `navsat_transform_node` / `robot_localization_listener_node` | `robot_localization`（源码依赖） | 仅 `ekf_node` 是（`launch_localization=true` 且未启用真值定位） | 第三方滤波、地理坐标转换和监听工具 |
 
 `autoware_msgs`、`wuta_msgs` 和 `wuta_tools` 是接口/工具包，不提供节点。`camera_detection`、
 `detection_fusion` 和 `kiss_icp_wrapper` 具有 package 元数据，但当前
