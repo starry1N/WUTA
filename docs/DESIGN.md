@@ -38,12 +38,12 @@ FSD 建图链路。
 ### 2.2 传统锥筒检测与地图
 
 检测器以高度阈值或 RANSAC 去地面、体素下采样、欧氏聚类，再以宽度/高度/距离筛选。
-`ConeMapBuilder` 以消息时间戳查询 `map <- sensor_frame`，在 `merge_distance` 内对坐标
-做命中次数加权平均；未确认锥筒在发布前由 `min_hit_count` 过滤。颜色可按车辆航向的
+`ConeMapBuilder` 以消息时间戳查询 `map <- sensor_frame`，以最近且语义颜色兼容的轨迹在
+`merge_distance` 内做命中次数加权平均；同一帧中一个轨迹最多匹配一个检测，未确认锥筒在发布前由 `min_hit_count` 过滤。颜色可按车辆航向的
 左右侧分配；上游相机/融合提供的语义颜色始终优先，未知色则采用距离最近的一次左右观测，
 避免远处相邻赛段的重复观测主导颜色。每个检测帧后按独立的
-`consolidation_distance` 对兼容轨迹做传递式合并，及时清除定位修正后逐渐收敛的重复堆叠；
-`min_hit_count=3` 再过滤短寿命候选。收到正式 `/system/lap_count` 达到
+`consolidation_distance` 对兼容、从未同帧共视的轨迹做传递式合并，及时清除定位修正后逐渐收敛的重复堆叠，同时保留密集弯道真实相邻锥桶；
+`min_hit_count=3` 再过滤短寿命候选。若相邻定位回调位移超过 1 m，builder 清空待处理检测并冷却 2 s，避免 KISS-ICP 错误重定位时将整段检测写入错误 map 位置。收到正式 `/system/lap_count` 达到
 `mapping_laps` 后地图冻结并保存 YAML；累计行驶、起点距离和朝向组成的几何回环检测保留为
 独立兜底。
 
@@ -69,7 +69,9 @@ Skidpad 按 `skidpad_start_*` 固定 map 参考生成：右环顺时针
 按赛道 map 参考穿过 75 m 终点线后在 100 m 停止区恒减速度制动。控制器在 `EXPLORE`、
 `MAPPING_DONE` 或 `RACE` 启用，避免门槛验收期间停车：通常以速度
 比例的 lookahead 选择目标点，Pure Pursuit 计算命令，`TwistFilter` 再执行车辆约束/安全
-过滤。Trackdrive 使用固定 `trackdrive_lookahead=5.0 m`，并在短暂失去前向目标时以低速保留上一有效命令，
+过滤。Trackdrive 默认使用受限动态前视：检查车辆前方 12 m 局部中心线曲率，直线保持
+`trackdrive_lookahead=5.0 m`，高曲率弯道平滑缩短至 `trackdrive_min_lookahead=3.0 m`，且不以规划目标速度为输入；
+前视距离再按 `trackdrive_lookahead_rate_limit=3.0 m/s` 限制变化。短暂失去前向目标时以低速保留上一有效命令，
 超时后停车；Acceleration 保持动态前视。Skidpad 专用 `skidpad_lookahead=3.0 m` 覆盖通用动态前视（5 m/s 下原本为 10 m）：
 圆的半径仅 9.125 m，10 m 前视会跨越交叉点的曲率切换，从而在第一/三圈切入内侧、或在第四圈
 出口过早卸载转向。自交叉 Skidpad 路径通过单调前向进度索引保持圈序；零速终点只有在车辆
@@ -81,7 +83,8 @@ Skidpad 按 `skidpad_start_*` 固定 map 参考生成：右环顺时针
 `ins_simulator` 默认以 20 Hz 缓存 `/sim/ground_truth`，向位置、yaw、速度和角速度注入
 可配置高斯噪声及协方差，再发布 `/cg410/odometry`。KISS-ICP 将 `/hesai/pandar` 注册为
 `/kiss/odometry`；其 `lidar_odom_frame=odom` 且不发布 TF。EKF 融合这两路 Odometry，发布
-`/odometry/filtered` 和唯一的动态 `odom -> base_link`。bringup 另发布静态同原点
+`/odometry/filtered` 和唯一的动态 `odom -> base_link`。`odom0`（KISS）使用 3σ pose 创新拒绝门限，
+`odom1`（INS）使用 5σ 门限；这是防止 Trackdrive 重复锥桶几何使 KISS 错误重定位后将大位姿跳变注入 EKF 的必要保护。bringup 另发布静态同原点
 `map -> odom` 与 `base_link -> lidar`，避免 TF 发布者冲突。`LocalizationManager` 在
 `LOC_KISS_ICP` 时将 `/odometry/filtered` 转为 `/localization/pose`，在 `LOC_NDT` 时接受
 `/ndt/pose`。`use_ground_truth_localization:=true` 是调试回退，不应与默认 EKF TF 并用。
@@ -130,9 +133,8 @@ Topic 被用于连续流（点云、位姿、路径、命令和状态）；当�
 的 `reset` 使用 service，因为它是一次性状态改变。
 
 `ConeMapBuilder` 明确创建两个 `MutuallyExclusive` callback group：50 Hz pose 回调和较慢的
-锥筒整合回调互不占用同一个组；要获得并发执行效果，部署者还需配合 MultiThreadedExecutor，
-而其 `main` 当前使用普通 `rclcpp::spin`。其他项目节点未创建 callback group，按单执行器
-回调模型运行。
+锥筒整合回调互不占用同一个组；其 `main` 使用 `MultiThreadedExecutor`，使这两个组可并行执行。
+其他项目节点未创建 callback group，按单执行器回调模型运行。
 
 时间设计：INS 使用 ground-truth header stamp；KISS 使用点云 stamp；EKF 用融合输出时间戳
 发布 `odom -> base_link`。LiDAR 点云和 ConeArray 保留采样时间；`cones_viz` 在采样时刻
@@ -144,11 +146,11 @@ Topic 被用于连续流（点云、位姿、路径、命令和状态）；当�
 | 问题 | 选择 | 原因与替代方案 |
 | --- | --- | --- |
 | 真值赛道如何调试 | 默认 `/sim/lidar/track_cones` 只作静态 marker；`use_track_truth_map` 提供完整 ConeMap 快捷输入；`use_simulated_cone_colors` 只给在线 LiDAR 检测补颜色 | 快捷地图用于隔离规划/控制；颜色注入保留在线坐标、去重和闭环建图。两种模式均不向规划提供 YAML 中心线，也不替代正式相机融合 |
-| 坐标变换 | ConeMapBuilder 只按检测时间查询 TF，短暂缺失时排队重试 | 保持传感器时序，避免用车辆当前位姿转换历史点云造成系统性偏移 |
+| 坐标变换与跳变保护 | ConeMapBuilder 只按检测时间查询 TF，短暂缺失时排队重试；定位跳变超过 1 m 时清队列并暂停 2 s | 保持传感器时序，避免用车辆当前位姿转换历史点云；即使时间戳正确，也不让错误 KISS/EKF 重定位固化为重复锥桶 |
 | Trackdrive 路径 | EXPLORE 局部路径 + 闭环地图冻结全局中心线 | 第一圈在线建图，后两圈沿已验收的有序环线竞速；中心线始终由 ConeMap 推导 |
 | Skidpad 交叉点跟踪 | Pure Pursuit 单调局部进度窗口 | 四圈与出口存在几何接近/重合点，按全部未来点搜索会直接跳至出口；每次只在有限连续窗口内推进可保证圈序 |
 | Skidpad 横向前视 | 固定 `skidpad_lookahead=3.0 m` | 通用 `v×2.0` 在 5 m/s 时为 10 m，接近圆半径并跨越交叉点的曲率突变；短前视保留当前圆的转向至实际切换点 |
-| Trackdrive 横向前视 | 固定 `trackdrive_lookahead=5.0 m`，短暂目标丢失低速保持 | 前视距离不再随 path_generator 的目标速度变化；局部中心线短暂反向/缺失时最多保持 0.5 s、2 m/s，超时停车，避免掉头或指令突变 |
+| Trackdrive 横向前视 | 曲率预判的受限动态前视（3–5 m），短暂目标丢失低速保持 | 在前方 12 m 计算稳健曲率，弯前缩短、直线拉长；不依赖 path_generator 目标速度，且以 3 m/s 限制变化，抑制地图刷新和噪声造成的指令突变。局部中心线短暂反向/缺失时最多保持 0.5 s、2 m/s，超时停车 |
 | Trackdrive 纵向速度 | 第一圈 7、第二圈 9、第三圈 10 m/s 上限，叠加曲率/可见距离/路径与定位置信度限速 | 第一圈保持已有速度；只有门槛通过才逐圈提速，质量下降时自动回到保守速度 |
 | 转向抖动抑制 | 连续 Pure Pursuit 曲率 + `max_steering_rate_deg_s` | 移除小横向误差的非连续放大；输出再按控制频率限转向速率，避免定位噪声直接成为执行器突变 |
 | Acceleration 停车 | 固定 map 路径 + 终点线后恒减速度 | 计时 75 m 内保持速度；停止区使用 `v²=2aΔx`，避免线性速度-距离剖面造成停止点前无限逼近 |
