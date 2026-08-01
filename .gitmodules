@@ -4,7 +4,7 @@
 	branch = 小登测试
 [submodule "WUTA-SIM/perception_simulation"]
 	path = WUTA-SIM/perception_simulation
-	url = https://github.com/GaoMingHa0/track_loader.git
+	url = https://github.com/Litieyue/perception_simulation.git
 	branch = main
 [submodule "WUTA-SIM/vehicle_model"]
 	path = WUTA-SIM/vehicle_model
