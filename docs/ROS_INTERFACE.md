@@ -5,8 +5,9 @@
 > `SensorDataQoS` 表示 best-effort、volatile、keep-last 的传感器 QoS。
 >
 > **默认定位链：** `ins_simulator`、KISS-ICP、EKF 与 localization_manager 默认启动。
-> `/sim/ground_truth` → `/cg410/odometry` 与 `/hesai/pandar` → `/kiss/odometry` 由 EKF
-> 融合为 `/odometry/filtered`，再转换为 `/localization/pose`。
+> EKF 默认融合 `/cg410/odometry` 的绝对位姿、纵向速度和 yaw rate，输出
+> `/odometry/filtered`，再转换为 `/localization/pose`。`/kiss/odometry` 默认只用于诊断和
+> map_saver；显式启用 `fuse_kiss_odometry` 时，只融合 sanitizer 检查后的增量速度/yaw rate。
 
 ## 1. Topic Interface
 

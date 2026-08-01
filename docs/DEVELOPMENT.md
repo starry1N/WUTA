@@ -124,8 +124,9 @@ INS 包位于 `WUTA-SIM/wuta-ins-simulator`，并已是 `simulator_bringup` 的�
   未知色检测层。二者是白色调试层；检查颜色时优先看
   `/sim/lidar/track_cones` 与 `/mapping/cone_map_viz`。
 - INS 是 `WUTA-SIM/wuta-ins-simulator` submodule，默认与 KISS-ICP + EKF 一起启动；
-  默认数据链为 `/sim/ground_truth -> /cg410/odometry -> ekf_node` 和
-  `/hesai/pandar -> /kiss/odometry -> ekf_node -> /localization/pose`。需要真值回退时使用
+  默认由 `/sim/ground_truth -> /cg410/odometry -> ekf_node -> /localization/pose` 约束定位。
+  KISS 的 `/kiss/odometry` 保留用于诊断和 map_saver，但不直接把全局 pose 送进 EKF；仅当
+  `fuse_kiss_odometry:=true` 时，sanitizer 才把通过检查的增量速度/yaw rate 送入 EKF。需要真值回退时使用
   `use_ground_truth_localization:=true`；启动文件会自动关闭 INS、KISS-ICP、EKF 和
   localization_manager，不要与默认 EKF TF 同时开启。
 - RViz 的 `MarkerArray` 使用真实 `Topic` 字段；看到

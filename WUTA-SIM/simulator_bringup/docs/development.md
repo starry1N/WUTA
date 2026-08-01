@@ -97,8 +97,11 @@ git submodule update --init --recursive
 ```
 
 `simulator.launch.py` 默认启动 INS 与融合定位。INS 将 `/sim/ground_truth` 加噪后以 20 Hz
-发布 `/cg410/odometry`；KISS-ICP 处理 `/hesai/pandar` 并发布 `/kiss/odometry`；EKF 融合两者
-并发布 `/odometry/filtered`，localization_manager 最终发布 `/localization/pose`。
+发布 `/cg410/odometry`；KISS-ICP 处理 `/hesai/pandar` 并发布 `/kiss/odometry`。默认
+`fuse_kiss_odometry=false`，EKF 使用 INS 的绝对位姿、纵向速度和 yaw rate，并发布
+`/odometry/filtered`；KISS 输出保留用于诊断和 map_saver。显式开启 KISS 融合时，sanitizer
+只向 EKF 提供经过有限值、硬上限和 INS 一致性检查的增量速度/yaw rate，不融合 KISS 全局 pose。
+localization_manager 最终发布 `/localization/pose`。
 
 TF 所有权固定为：bringup 发布静态同原点 `map -> odom` 与 `base_link -> lidar`，EKF 发布唯一
 动态 `odom -> base_link`，KISS 不发布 TF。需要在不接入 INS、KISS-ICP 与 EKF 的情况下进行
