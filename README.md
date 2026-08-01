@@ -103,9 +103,14 @@ git submodule update --init --recursive
 更新主仓库及其已记录的子模块版本：
 
 ```bash
-git pull --recurse-submodules
+git pull --no-recurse-submodules
+git submodule sync --recursive
 git submodule update --init --recursive
 ```
+
+先更新父仓库、再执行 `submodule sync`，可以正确应用 `.gitmodules` 中发生过的子模块
+URL 变更，避免已有克隆继续使用本地缓存的旧地址。各子模块是独立 GitHub 仓库，主仓库的
+collaborator 权限不会自动赋予对子模块的写权限；这不影响公开子模块的克隆和拉取。
 
 主仓库当前记录的子模块包括：`WUTA-FSD`、`WUTA-SIM/perception_simulation`、
 `WUTA-SIM/vehicle_model`、`WUTA-SIM/can_simulator` 和
@@ -121,7 +126,8 @@ git submodule update --init --recursive
 
 ```bash
 cd /path/to/WUTA
-git pull --recurse-submodules
+git pull --no-recurse-submodules
+git submodule sync --recursive
 git submodule update --init --recursive
 ```
 
