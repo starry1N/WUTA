@@ -11,6 +11,7 @@ launch_arguments:
   lidar_fov_deg: 360.0
   lidar_max_range: 20.0
   lidar_enable_occlusion: true
+  lidar_show_track_labels: false
   mission_mode: trackdrive
   launch_fsd: true
   use_track_truth_map: false

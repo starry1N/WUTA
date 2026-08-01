@@ -113,8 +113,13 @@ INS 包位于 `WUTA-SIM/wuta-ins-simulator`，并已是 `simulator_bringup` 的�
 - Hesai 128 仿真默认请求 `lidar_fov_deg:=360.0`，但外部 `track_loader` 子模块当前仍有
   独立车前方过滤，所以有效覆盖是最大前向窗口而非完整环视。`120°` 只用于显式退化测试。
 - 整车闭环保留 `lidar_enable_occlusion:=true`，同时使用 `lidar_max_range:=20.0` 与下游
-  检测距离一致，避免为检测器必然丢弃的远处锥桶执行逐锥遮挡计算并拖旧点云时间戳。
-  该模式用于仿真建图验收，真实系统应由 camera/fusion 链路替代。
+  检测距离一致。仿真器批量变换静态锥桶并使用向量化 AABB 遮挡测试，避免逐候选、逐赛道锥桶
+  的 Python 对象循环拖旧点云时间戳。
+- `lidar_show_track_labels:=false` 默认关闭完整赛道 531 个锥桶的 ID/type 文字，仅保留锥桶
+  marker；需要静态赛道标注时可显式开启。
+- `use_simulated_cone_colors` 仅用于仿真建图验收，真实系统应由 camera/fusion 链路替代。
+- 2026-08-01 的默认 RViz、多地图与双颜色模式运行结果见
+  [`TRACKDRIVE_RUNTIME_VALIDATION_2026-08-01.md`](TRACKDRIVE_RUNTIME_VALIDATION_2026-08-01.md)。
 - RViz 默认关闭 `/hesai/pandar` 原始点云和 `/perception/lidar/cones_viz`
   未知色检测层。二者是白色调试层；检查颜色时优先看
   `/sim/lidar/track_cones` 与 `/mapping/cone_map_viz`。

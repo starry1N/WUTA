@@ -123,6 +123,10 @@ def generate_launch_description():
                     LaunchConfiguration("lidar_enable_occlusion"),
                     value_type=bool,
                 ),
+                "show_track_labels": ParameterValue(
+                    LaunchConfiguration("lidar_show_track_labels"),
+                    value_type=bool,
+                ),
             },
         ],
     )
@@ -389,6 +393,15 @@ def generate_launch_description():
                 description=(
                     "Enable per-cone line-of-sight occlusion to reject cones "
                     "hidden by nearby track boundaries."
+                ),
+            ),
+            DeclareLaunchArgument(
+                "lidar_show_track_labels",
+                default_value="false",
+                choices=["true", "false"],
+                description=(
+                    "Render ID/type text for every static track cone. Disabled "
+                    "by default to keep RViz responsive on small VMs."
                 ),
             ),
             DeclareLaunchArgument(

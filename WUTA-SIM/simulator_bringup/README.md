@@ -102,7 +102,10 @@ ros2 topic echo /system/simulator_latency
 128 的完整水平环视。需要复现更窄的前向传感器时可显式覆盖，例如 `lidar_fov_deg:=120.0`。
 整车闭环保留 `lidar_enable_occlusion:=true`，并把 `lidar_max_range:=20.0` 与
 `lidar_detection.max_detection_range` 对齐。这样既过滤紧邻赛段中被边界遮挡的锥桶，也避免
-为检测器必然丢弃的 20–50 米锥桶执行昂贵的逐锥遮挡计算。
+为检测器必然丢弃的 20–50 米锥桶执行遮挡计算。遮挡判定批量变换静态赛道锥桶，并用向量化
+AABB 相交测试保持 10 Hz 扫描更新；不改变视场、距离、噪声或遮挡语义。静态赛道锥桶本体
+仍默认显示，但逐锥 ID/type 文字默认关闭以降低 RViz CPU 占用；调试时可显式设置
+`lidar_show_track_labels:=true`。
 
 ### RViz 手动就绪调试
 

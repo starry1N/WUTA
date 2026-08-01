@@ -155,7 +155,7 @@ Visualization Manager:
           Name: Loaded Track Cones (YAML Ground Truth)
           Namespaces:
             track_cones: true
-            track_cone_info: true
+            track_cone_info: false
           Topic:
             Depth: 5
             Durability Policy: Transient Local
