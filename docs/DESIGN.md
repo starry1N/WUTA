@@ -13,7 +13,7 @@
 | 边界/中心线 | `BoundaryDetectorNode` 与 `PathSearch`；`WUTA-FSD/.../planning/boundary_detector/` | EXPLORE 局部搜索；闭环后从蓝黄锥地图生成、验收并冻结有序全局中心线 |
 | 路径 | `PathGeneratorNode`；`WUTA-FSD/.../planning/path_generator/` | Trackdrive 环线切片和分圈速度剖面；Skidpad 固定四圈、退出和停车路径；Acceleration 解析直线路径 |
 | 控制 | `ControllerNode`、`PurePursuit`、`TwistFilter`；`WUTA-FSD/.../control/controller/` | 定时计算目标点、转向与速度限幅 |
-| 定位 | `INSSimulator`、`kiss_icp_node`、`ekf_node`、`LocalizationManager`、`NdtLocalization` | 默认融合 INS 与 KISS-ICP；NDT 仅在 NDT 模式运行 |
+| 定位 | `INSSimulator`、`kiss_icp_node`、`kiss_odom_sanitizer_node`、`ekf_node`、`LocalizationManager`、`NdtLocalization` | 默认由 INS 约束 EKF，KISS 保持诊断输出；可选 sanitizer 只融合 KISS 增量速度；NDT 仅在 NDT 模式运行 |
 
 所有自定义 C++ 节点以 `rclcpp::spin(std::make_shared<...>())` 运行；Python 节点以
 单节点 `rclpy.spin(node)` 运行。它们没有 ROS lifecycle 状态机，启动、运行和
@@ -87,14 +87,20 @@ Skidpad 按 `skidpad_start_*` 固定 map 参考生成：右环顺时针
 
 `ins_simulator` 默认以 20 Hz 缓存 `/sim/ground_truth`，向位置、yaw、速度和角速度注入
 可配置高斯噪声及协方差，再发布 `/cg410/odometry`。KISS-ICP 将 `/hesai/pandar` 注册为
-`/kiss/odometry`；其 `lidar_odom_frame=odom` 且不发布 TF。EKF 直接融合连续 KISS pose 与 INS
-绝对 map 位置和航向，发布 `/odometry/filtered` 和唯一的动态 `odom -> base_link`。KISS 使用
-3σ pose 创新拒绝门限，INS 使用 5σ pose 门限，拒绝重复锥桶赛段上的错误重定位。实验性的
-“连续弯阻断 KISS、直道恢复差分输入”方案会在重接入时造成 EKF 跳变，默认链路不再启动该门控。
+`/kiss/odometry`；其 `lidar_odom_frame=odom` 且不发布 TF。仿真默认
+`fuse_kiss_odometry=false`：EKF 使用 CG-410 INS 的绝对位置、航向、纵向速度和 yaw rate，
+KISS 持续运行并为诊断及 map_saver 提供数据，但其全局位姿不进入 EKF。
+
+显式设置 `fuse_kiss_odometry=true` 时，`kiss_odom_sanitizer_node` 根据相邻 KISS 位姿增量计算
+车体系平面速度和 yaw rate。节点检查有限值、时间间隔、硬速度/角速度上限，并与最近 INS
+速度和 yaw rate 做一致性比较；通过后只发布 `/kiss/odometry_sanitized` 的 twist 分量。
+因此 KISS 的任意全局原点、回环漂移或错误重定位都不会作为绝对 pose 注入 EKF。该可选模式已完成
+首圈及进入 RACE 的冒烟验证，默认仍保持关闭。
 bringup 另发布静态同原点
 `map -> odom` 与 `base_link -> lidar`，避免 TF 发布者冲突。`LocalizationManager` 在
 `LOC_KISS_ICP` 时将 `/odometry/filtered` 转为 `/localization/pose`，在 `LOC_NDT` 时接受
-`/ndt/pose`。`use_ground_truth_localization:=true` 是调试回退，不应与默认 EKF TF 并用。
+`/ndt/pose`；它拒绝非有限位姿/协方差，并在 `FINISH` 或 `EMERGENCY` 停止继续转发位姿。
+`use_ground_truth_localization:=true` 是调试回退，不应与默认 EKF TF 并用。
 该参数为 `false` 时，`simulation_bridge` 不创建真值 pose publisher 或 TF broadcaster。
 NDT 读取 PCD 地图、等待初始位姿，在 NDT 模式对降采样 scan 匹配并维护最多 500 个 pose
 的路径。`map_saver` 的传感器到 map 变换在源码中仍标为 TODO，使用它保存地图前必须验证
@@ -104,7 +110,9 @@ TF 假设。
 
 `path_generator` 发布 `/planning/final_waypoints_viz`（规划参考路径）和
 `/planning/driven_trajectory_viz`（定位估计的实际行驶轨迹）。后者只在可视化层对
-`/localization/pose` 做一阶平滑与最小空间间隔采样；它不回写 EKF、不改变建图，也不改变控制输入。
+`/localization/pose` 做一阶平滑与最小空间间隔采样，并拒绝非有限值及超过
+`driven_trajectory_max_step` 的显示跳变；`FINISH/EMERGENCY` 后停止追加。它不回写 EKF、不改变
+建图，也不改变控制输入。
 因此 Ground Truth 用于判断仿真车辆真实运动，Driven Trajectory 用于观察实车可获得的定位轨迹。
 
 `simulation_bridge` 不拥有任务状态：它发布就绪、可选真值定位，并在仿真中作为临时 VCU 输入源

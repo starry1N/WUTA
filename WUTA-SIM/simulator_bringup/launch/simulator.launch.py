@@ -186,6 +186,7 @@ def generate_launch_description():
         ),
         launch_arguments={
             "pointcloud_topic": "/hesai/pandar",
+            "fuse_kiss_odometry": LaunchConfiguration("fuse_kiss_odometry"),
         }.items(),
         condition=IfCondition(
             PythonExpression([
@@ -487,6 +488,17 @@ def generate_launch_description():
                 choices=["true", "false"],
                 description=(
                     "Launch KISS-ICP, EKF and localization_manager (default)."
+                ),
+            ),
+            DeclareLaunchArgument(
+                "fuse_kiss_odometry",
+                default_value="false",
+                choices=["true", "false"],
+                description=(
+                    "Fuse sanitized KISS-ICP velocity into localization EKF. Disabled "
+                    "by default because cone-only ICP can match the wrong "
+                    "Trackdrive segment; simulated CG-410 remains the absolute "
+                    "sensor input."
                 ),
             ),
             DeclareLaunchArgument(

@@ -12,8 +12,10 @@ WUTA 是面向 Formula Student Driverless 赛道的 ROS 2 系统。当前代码�
 
 INS 模拟器已作为默认 submodule 组件接入：它将真值加噪后发布 `/cg410/odometry`。
 默认 bringup 同时启动 KISS-ICP、robot_localization EKF 与 localization_manager：KISS
-处理 `/hesai/pandar`，EKF 融合 `/kiss/odometry` 和 `/cg410/odometry`，再由
-localization_manager 统一发布 `/localization/pose`。NDT 组件仍不在默认 bringup。
+处理 `/hesai/pandar` 并保留 `/kiss/odometry` 供诊断和地图保存；EKF 默认只融合
+`/cg410/odometry` 的绝对位姿、纵向速度和 yaw rate，再由 localization_manager 统一发布
+`/localization/pose`。显式启用 `fuse_kiss_odometry` 时，KISS 增量会先经过一致性检查，且只以
+速度/yaw rate 进入 EKF。NDT 组件仍不在默认 bringup。
 
 能力边界：
 
@@ -36,7 +38,8 @@ graph TD
   LS -->|/hesai/pandar| KISS[kiss_icp_node]
   LS -->|scan stamp| SB
   VM -->|timestamped pose| SCC[simulated_cone_colorizer]
-  KISS -->|/kiss/odometry| EKF[ekf_node]
+  KISS -->|/kiss/odometry| KS[kiss_odom_sanitizer_node optional]
+  KS -->|/kiss/odometry_sanitized velocity| EKF[ekf_node]
   INS -->|/cg410/odometry| EKF
   EKF -->|/odometry/filtered| LM[localization_manager]
   LM -->|/localization/pose| CMB[cone_map_builder]
@@ -95,13 +98,14 @@ graph TD
 | `mission_manager_node` | `mission_manager` | 是（`launch_fsd`） | 唯一 MissionState 发布者；验证 RACE 门槛，用定位穿越有限起终线生成 `/system/lap_count`，第三圈后 FINISH |
 | `localization_manager_node` | `localization_manager` | 是（`launch_localization=true` 且未启用真值定位） | EKF/NDT 位姿源切换；发布 `/localization/pose`、ready 与协方差派生的定位置信度 |
 | `kiss_icp_node` | KISS-ICP ROS package | 是（`launch_localization=true` 且未启用真值定位） | 点云 → `/kiss/odometry`；TF 由 EKF 单独发布 |
+| `kiss_odom_sanitizer_node` | `kiss_icp_wrapper` | 仅 `fuse_kiss_odometry=true` | 将 KISS 相邻位姿增量换算为车体系速度/yaw rate，并用有限值、硬速度上限及 INS 一致性检查过滤；不输出 KISS 全局位姿 |
 | `ndt_localization_node` | `ndt_localization` | 否 | PCL NDT 匹配；点云、初始位姿、状态 → `/ndt/pose`、路径 |
 | `map_saver_node` | `ndt_localization` | 否 | 探索阶段累积/下采样点云并保存 PCD；点云、KISS odom、状态 → `/ndt/map_ready` |
 | `ekf_node` / `ukf_node` / `navsat_transform_node` / `robot_localization_listener_node` | `robot_localization`（源码依赖） | 仅 `ekf_node` 是（`launch_localization=true` 且未启用真值定位） | 第三方滤波、地理坐标转换和监听工具 |
 
-`autoware_msgs`、`wuta_msgs` 和 `wuta_tools` 是接口/工具包，不提供节点。`camera_detection`、
-`detection_fusion` 和 `kiss_icp_wrapper` 具有 package 元数据，但当前
-源码树中没有由本项目 CMake/launch 暴露的可执行节点，故不列为运行节点。
+`autoware_msgs`、`wuta_msgs` 和 `wuta_tools` 是接口/工具包，不提供节点。`camera_detection` 与
+`detection_fusion` 具有 package 元数据，但当前源码树中没有由本项目 CMake/launch 暴露的
+可执行节点；`kiss_icp_wrapper` 提供上述可选 sanitizer。
 
 仿真中 `simulation_bridge` 充当临时 VCU 输入源：它周期发布 mission mode、GO/start、
 `emergency=false` 与 `inspection_trigger=false` 给 `mission_manager`。实车应由 CAN 接口替换这组
@@ -116,7 +120,8 @@ graph TD
 - 速度反馈：`can_simulator` 从真值里程计生成 `TwistStamped`；
 - TF：bringup 发布静态 `map -> odom`（仿真中两者同原点）与 `base_link -> lidar`（z=1 m）；
   EKF 发布动态 `odom -> base_link`，因此完整链为 `map -> odom -> base_link -> lidar`；
-- `ins_simulator`、KISS-ICP 与 EKF 是默认定位链；真实 CG-410 驱动仍需替换 INS 子模块。
+- `ins_simulator`、KISS-ICP 与 EKF 均默认启动，但默认定位解由 INS 输入约束；KISS 输出用于诊断，
+  仅在显式启用 sanitizer 后以速度约束参与 EKF。真实 CG-410 驱动仍需替换 INS 子模块。
   `mission_manager` 的 CAN 车检发送仍是 TODO。
 
 ## 5. Software Stack

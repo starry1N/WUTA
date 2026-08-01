@@ -4,7 +4,8 @@
 本包通过包含它们各自的 launch 文件进行编排，并可选启动 WUTA-FSD Level A
 闭环。默认定位链由 `ins_simulator`、KISS-ICP、EKF 和 localization_manager 组成：
 INS 将 ground truth 加噪后发布 `/cg410/odometry`，KISS-ICP 从 `/hesai/pandar` 生成
-`/kiss/odometry`，EKF 融合后经 localization_manager 发布 `/localization/pose`。
+`/kiss/odometry` 供诊断和地图保存；默认 EKF 使用 INS 的位姿、纵向速度和 yaw rate，融合后经
+localization_manager 发布 `/localization/pose`。可显式启用经过一致性检查的 KISS 增量速度融合。
 
 ## Dependency order
 
@@ -13,7 +14,8 @@ INS 将 ground truth 加噪后发布 `/cg410/odometry`，KISS-ICP 从 `/hesai/pa
 2. `can_simulator` 和 `lidar_sim` 在 ground truth 源启动后再启动。
 3. `can_simulator`、`lidar_sim` 与 `ins_simulator` 默认启动；INS 发布模拟 CG-410
    里程计。
-4. 随后默认启动 KISS-ICP、EKF 和 localization_manager，产生统一定位输出。
+4. 随后默认启动 KISS-ICP、EKF 和 localization_manager，产生统一定位输出；默认不把 KISS
+   全局位姿注入 EKF。
 5. 启用 `launch_fsd` 时，WUTA-FSD 按数据流顺序启动：
    `lidar_detection` -> `cone_map_builder` -> `boundary_detector` ->
    `mission_manager` -> `path_generator` -> `controller`.
@@ -243,7 +245,8 @@ Trackdrive 正式圈次由 `mission_manager` 使用 `/localization/pose` 穿越�
 
 | 场景 | 参数 | 结果 |
 | --- | --- | --- |
-| 默认闭环 | 不传定位参数 | INS + KISS-ICP + EKF + localization_manager，EKF 发布 `odom -> base_link` |
+| 默认闭环 | 不传定位参数（`fuse_kiss_odometry:=false`） | KISS 持续提供诊断；INS 约束 EKF，EKF 发布 `odom -> base_link`；不是直接真值定位 |
+| 可选 KISS 速度冗余 | `fuse_kiss_odometry:=true` | sanitizer 检查 KISS 增量，只把车体系速度/yaw rate 送入 EKF；KISS 全局 pose 不融合 |
 | 真值定位调试（不接 INS/EKF） | `use_ground_truth_localization:=true` | bridge 发布真值 pose/TF；INS 与融合定位自动关闭 |
 | 仅仿真传感器/RViz | `launch_fsd:=false use_ground_truth_localization:=true` | 不启动 FSD 感知、规划、控制；保留真值传感器与 TF |
 

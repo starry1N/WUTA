@@ -8,6 +8,7 @@ All runs used the Ubuntu VM with 2 vCPUs and the normal simulator launch path:
 - `use_ground_truth_localization:=false`
 - `launch_ins:=true`
 - `launch_localization:=true`
+- `fuse_kiss_odometry:=false`
 - `launch_rviz:=true`
 - `lidar_enable_occlusion:=true`
 - `lidar_max_range:=20.0`
@@ -25,29 +26,43 @@ visibility decisions and restored 10.0 Hz (observed maximum interval 0.163 s).
 `/planning/final_waypoints` then remained at 5.0 Hz (maximum interval 0.285 s).
 
 The incoming experimental `kiss_odom_gate_node` caused 12.44 m and 9.27 m EKF
-jumps when KISS was re-enabled after a blocked interval. It was removed. The
-validated chain directly fuses continuous `/kiss/odometry` with INS and retains
-the 3-sigma KISS and 5-sigma INS innovation gates.
+jumps when KISS was re-enabled after a blocked interval. Directly fusing absolute
+KISS and INS poses could still finish three laps, but KISS ended about 5.4 m from
+the INS origin; 116 s after FINISH the EKF became non-finite and RViz retained the
+resulting exploded driven trajectory. Raw differential KISS also produced a
+13.93 m increment, while an earlier re-entry sanitizer experiment produced a
+1,681 m EKF excursion near lap one.
+
+The final default therefore keeps KISS running for diagnostics and map saving but
+sets `fuse_kiss_odometry:=false`. EKF uses the simulated CG-410 INS absolute pose,
+longitudinal velocity, and yaw rate. The optional true setting uses a new sanitizer
+that derives only velocity/yaw rate from KISS increments and rejects non-finite,
+hard-limit, and INS-inconsistent samples; KISS global pose never enters EKF.
 
 ## Final map and lap matrix
 
 | Track | Online map | Frozen centerline | Explore lap | Race lap(s) | Result |
 | --- | --- | --- | ---: | ---: | --- |
-| `track2` | 531/531 tracks; blue 265, yellow 266 | 266 points, confidence 0.927 | 115.30 s | 76.46 s | 2/2 FINISH |
-| classic `trackdrive` | 381 confirmed, 383 internal from 384 truth | 191 points, confidence 0.973 | 85.15 s | 52.06 s | 2/2 FINISH |
+| `track2`, simulated colors disabled | blue 265, yellow 266 | quality PASS | 162.54 s | 76.36 s / 71.78 s | 3/3 FINISH |
+| classic `trackdrive`, simulated colors disabled | blue 189, yellow 190 | quality PASS | 87.76 s | 51.94 s / 46.90 s | 3/3 FINISH |
 | external track 6 | 149/149 tracks | 85 points, confidence 0.957 | 53.38 s | 31.30 s | 2/2 FINISH |
 | external track 7 | 159/159 tracks | 83 points, confidence 0.964 | 43.44 s | 26.84 s | 2/2 FINISH |
 | external track 8 | 187/187 tracks | 109 points, confidence 0.976 | 48.59 s | 30.36 s | 2/2 FINISH |
 | external track 9 | 196/196 tracks; blue 99, yellow 97 | 101 points, confidence 0.911 | 62.64 s | 38.76 s | 2/2 FINISH |
-| `track2`, simulated colors disabled | 531/531 tracks; blue 265, yellow 266 | 266 points, confidence 0.927 | 163.69 s | 76.50 s | 2/2 FINISH |
 
-An earlier full three-lap `track2` run on the same fix completed in 116.60 s,
-76.60 s, and 70.94 s, then published a zero-speed command in `FINISH`. A full
-classic `trackdrive` run completed in 87.72 s, 52.20 s, and 47.10 s.
+The final `track2` run remained stationary for another 160 s after FINISH. EKF
+remained finite at `(0.389, 0.020)` and logs contained no NaN or localization
+jump. The optional `fuse_kiss_odometry:=true` mode was smoke-tested through the
+classic trackdrive first lap and transition into RACE; isolated bad KISS increments
+were rejected without a localization jump or non-finite output.
 
 ## Generalization safeguards
 
 - No code branches on a track name or truth cone position.
+- KISS global pose is never injected into EKF. The optional fusion path is based
+  only on checked increments, so it does not assume a shared absolute origin.
+- Localization and driven-trajectory publishers reject non-finite values and stop
+  producing terminal-state history, preventing stale RViz paths from masking faults.
 - Pose-jump allowance is based on stamped elapsed time and a configurable
   plausible speed, so delayed callbacks at race speed are not treated as jumps.
 - Map closure can remove only a small and clearly separated cluster of weak
