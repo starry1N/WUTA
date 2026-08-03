@@ -11,6 +11,7 @@ DEFAULT_CONFIG_FILE="${ROOT_DIR}/config/simulator_defaults.yaml"
 CLEAN=0
 SKIP_BUILD=0
 BUILD_ONLY=0
+LIGHTWEIGHT=0
 LAUNCH_ARGS=()
 CONFIG_FILE="${DEFAULT_CONFIG_FILE}"
 
@@ -24,6 +25,7 @@ Options:
   --clean       Clean both workspaces before building.
   --skip-build  Skip all builds and use the existing install spaces.
   --build-only  Build both workspaces without starting ROS nodes.
+  --lightweight Limit parallel jobs (for systems with <=8GB RAM).
   --rviz        Start RViz2 with the default simulator visualization config.
   --config PATH Load build and launch defaults from a YAML config file.
   -h, --help    Show this help.
@@ -163,6 +165,10 @@ while [[ $# -gt 0 ]]; do
       BUILD_ONLY=1
       shift
       ;;
+    --lightweight)
+      LIGHTWEIGHT=1
+      shift
+      ;;
     --rviz)
       set_launch_arg "launch_rviz:=true"
       shift
@@ -204,17 +210,23 @@ fi
 
 if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   echo "[1/2] Building the complete WUTA-FSD workspace..."
+  
+  # 构建 FSD 参数
+  FSD_BUILD_ARGS=""
   if [[ "${CLEAN}" -eq 1 ]]; then
-    (cd "${FSD_WS}" && ./build_ws.sh --clean)
+    FSD_BUILD_ARGS="--clean"
     rm -rf "${SIM_WS}/build" "${SIM_WS}/install" "${SIM_WS}/log"
     find "${SIM_WS}" -mindepth 2 -maxdepth 5 -type d \
       \( -name "build" -o -name "install" -o -name "log" -o -name "__pycache__" \) \
       -exec rm -rf {} + 2>/dev/null || true
     find "${FSD_WS}" -mindepth 3 -maxdepth 6 -type d -name "__pycache__" \
       -exec rm -rf {} + 2>/dev/null || true
-  else
-    (cd "${FSD_WS}" && ./build_ws.sh)
   fi
+  if [[ "${LIGHTWEIGHT}" -eq 1 ]]; then
+    FSD_BUILD_ARGS="${FSD_BUILD_ARGS} --lightweight"
+  fi
+  
+  (cd "${FSD_WS}" && ./build_ws.sh ${FSD_BUILD_ARGS})
 
   set +u
   source "${FSD_WS}/install/setup.bash"
@@ -223,10 +235,18 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   echo "[2/2] Building the simulator overlay..."
   (
     cd "${SIM_WS}"
-    colcon build \
-      --base-paths . \
-      --symlink-install \
-      --packages-up-to simulator_bringup
+    if [[ "${LIGHTWEIGHT}" -eq 1 ]]; then
+      colcon build \
+        --base-paths . \
+        --symlink-install \
+        --parallel-workers 2 \
+        --packages-up-to simulator_bringup
+    else
+      colcon build \
+        --base-paths . \
+        --symlink-install \
+        --packages-up-to simulator_bringup
+    fi
   )
 fi
 

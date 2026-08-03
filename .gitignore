@@ -40,6 +40,15 @@
 **.tmp
 **.temp
 
+# GUI logs
+wuta_gui/logs/
+*.log
+logs/
+
+# wuta_gui cache
+wuta_gui/__pycache__/
+.wuta_gui_state.json
+
 # ROS bags
 **.bag
 

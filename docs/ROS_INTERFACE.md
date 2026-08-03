@@ -40,8 +40,7 @@
 | `/system/start_command` | `std_msgs/msg/Bool` | simulation_bridge（`auto_start=true`）或外部；实车 CAN 接口待实现 | mission_manager | 仿真出发输入；`true` 使 READY 进入 EXPLORE；depth 10 |
 | `/clicked_point` | `geometry_msgs/msg/PointStamped` | RViz Publish Point | simulation_bridge | `manual_ready=true` 时，一次点击锁存人工就绪并使 bridge 发布 ready；depth 10 |
 | `/system/lap_time` | `std_msgs/msg/Float64` | simulation_bridge | RViz/记录工具 | 仿真真值跨线用时；仅用于成绩和正式圈次对照，不控制 Trackdrive 状态机 |
-| `/system/simulator_latency` | `std_msgs/msg/Float64` | simulation_bridge | RViz/记录工具 | 每个控制命令发布；单位 s；`/control/command.header.stamp - 最新 /hesai/pandar.header.stamp` |
-| `/system/status_viz` | `visualization_msgs/msg/MarkerArray` | simulation_bridge | RViz | 10 Hz；显示任务模式、状态、真值速度/位置、最近单圈用时与 LiDAR→命令延迟；depth 10 |
+| `/system/simulator_latency` | `std_msgs/msg/Float64` | simulation_bridge | 记录工具 | 每个控制命令发布；单位 s；`/control/command.header.stamp - 最新 /hesai/pandar.header.stamp` |
 | `/system/lidar_ready` | `std_msgs/msg/Bool` | simulation_bridge | mission_manager | 10 Hz；depth 10 |
 | `/system/localization_ready` | `std_msgs/msg/Bool` | localization_manager（默认）或 simulation_bridge（真值回退） | mission_manager | 随定位输出；depth 10 |
 | `/system/localization_confidence` | `std_msgs/msg/Float32` | localization_manager（默认）或 simulation_bridge（真值回退） | mission_manager、path_generator | 协方差派生或真值调试置信度 `[0,1]`；depth 10 |
