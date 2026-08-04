@@ -14,6 +14,7 @@ BUILD_ONLY=0
 LIGHTWEIGHT=0
 LAUNCH_ARGS=()
 CONFIG_FILE="${DEFAULT_CONFIG_FILE}"
+PARAMS_FILE=""
 
 usage() {
   cat <<'EOF'
@@ -28,6 +29,7 @@ Options:
   --lightweight Limit parallel jobs (for systems with <=8GB RAM).
   --rviz        Start RViz2 with the default simulator visualization config.
   --config PATH Load build and launch defaults from a YAML config file.
+  --params-file PATH Load node parameters from YAML file after launch.
   -h, --help    Show this help.
 
 Examples:
@@ -58,8 +60,8 @@ set_launch_arg() {
   LAUNCH_ARGS+=("${argument}")
 }
 
-# Resolve --config before loading defaults so every later command-line launch
-# argument can override the selected configuration.
+# Resolve --config and --params-file before loading defaults so every later
+# command-line launch argument can override the selected configuration.
 for ((index = 1; index <= $#; ++index)); do
   case "${!index}" in
     --config)
@@ -72,6 +74,17 @@ for ((index = 1; index <= $#; ++index)); do
       ;;
     --config=*)
       CONFIG_FILE="${!index#--config=}"
+      ;;
+    --params-file)
+      next_index=$((index + 1))
+      if (( next_index > $# )); then
+        echo "--params-file requires a YAML file path." >&2
+        exit 2
+      fi
+      PARAMS_FILE="${!next_index}"
+      ;;
+    --params-file=*)
+      PARAMS_FILE="${!index#--params-file=}"
       ;;
   esac
 done
@@ -179,6 +192,12 @@ while [[ $# -gt 0 ]]; do
     --config=*)
       shift
       ;;
+    --params-file)
+      shift 2
+      ;;
+    --params-file=*)
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -272,4 +291,106 @@ fi
 
 echo "Starting simulator_bringup..."
 cd "${ROOT_DIR}"
-exec ros2 launch simulator_bringup simulator.launch.py "${LAUNCH_ARGS[@]}"
+
+# Launch simulator in background so we can load parameters after nodes start
+ros2 launch simulator_bringup simulator.launch.py "${LAUNCH_ARGS[@]}" &
+LAUNCH_PID=$!
+
+# Load node parameters if specified
+if [[ -n "${PARAMS_FILE}" ]] && [[ -f "${PARAMS_FILE}" ]]; then
+  echo "Loading node parameters from ${PARAMS_FILE}..."
+
+  # Parse the params file and apply to each node
+  # Expected format:
+  #   parameters:
+  #     node_name:
+  #       param_name: value
+  #
+  # ros2 param load expects:
+  #   node_name:
+  #     ros__parameters:
+  #       param_name: value
+  python3 -c '
+import yaml
+import subprocess
+import sys
+import tempfile
+import os
+import time
+
+params_file = sys.argv[1]
+with open(params_file, encoding="utf-8") as f:
+    config = yaml.safe_load(f)
+
+if not config or "parameters" not in config:
+    print("Invalid params file: missing parameters section", file=sys.stderr)
+    sys.exit(0)
+
+node_params = config["parameters"]
+
+def wait_for_node(node_name, timeout=30):
+    """Wait until the node appears in ros2 node list"""
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            result = subprocess.run(
+                ["ros2", "node", "list"],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0 and node_name in result.stdout:
+                return True
+        except Exception:
+            pass
+        time.sleep(0.5)
+    return False
+
+applied = 0
+failed_nodes = []
+for node_name, params in node_params.items():
+    if not isinstance(params, dict):
+        continue
+
+    # Wait for the node to be available
+    print(f"  Waiting for {node_name}...")
+    if not wait_for_node(node_name, timeout=30):
+        print(f"  Timeout waiting for {node_name}, skipping", file=sys.stderr)
+        failed_nodes.append(node_name)
+        continue
+
+    # Build ros2 param load compatible format
+    ros2_params = {node_name: {"ros__parameters": params}}
+
+    # Write to temp file
+    tmp_fd, tmp_path = tempfile.mkstemp(
+        prefix=f"wuta_params_{node_name}_", suffix=".yaml"
+    )
+    try:
+        with os.fdopen(tmp_fd, "w") as tmp_f:
+            yaml.dump(ros2_params, tmp_f, default_flow_style=False)
+
+        result = subprocess.run(
+            ["ros2", "param", "load", node_name, tmp_path],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0:
+            print(f"  Loaded {len(params)} params for {node_name}")
+            applied += 1
+        else:
+            err = result.stderr.strip() if result.stderr else "unknown error"
+            print(f"  Failed to load {node_name}: {err}", file=sys.stderr)
+            failed_nodes.append(node_name)
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+print(f"Parameters applied to {applied} node(s)")
+if failed_nodes:
+    print(f"Failed nodes: {', '.join(failed_nodes)}", file=sys.stderr)
+' "${PARAMS_FILE}" || true
+fi
+
+# Wait for the launch process to finish
+wait $LAUNCH_PID
+exit $?

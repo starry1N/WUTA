@@ -1,4 +1,4 @@
-"""仿真启动模块 - 复用 start_simulator.sh"""
+"""仿真启动模块 - 复用 start_simulator.sh，支持参数配置加载"""
 
 import os
 import signal
@@ -56,28 +56,28 @@ class Launcher(QObject):
     def launch(self, params: Dict[str, Any]) -> bool:
         """
         启动仿真
-        
+
         Args:
-            params: 启动参数字典
-            
+            params: 启动参数字典，可包含 params_file 字段指定参数配置文件
+
         Returns:
             是否成功启动
         """
-        # 构建命令
+        # 构建命令（包含 --params-file 参数）
         cmd = self._build_command(params)
-        
+
         # 创建日志文件
         log_dir = self.wuta_root / "logs"
         log_dir.mkdir(exist_ok=True)
         self.log_file = str(log_dir / f"sim_{datetime.now():%Y%m%d_%H%M%S}.log")
-        
+
         try:
             # 启动进程
             log_handle = open(self.log_file, 'w')
             log_handle.write(f"# Command: {' '.join(cmd)}\n")
             log_handle.write(f"# Started: {datetime.now().isoformat()}\n\n")
             log_handle.flush()
-            
+
             self.process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -87,7 +87,7 @@ class Launcher(QObject):
                 bufsize=1,
                 preexec_fn=os.setsid  # 创建新进程组
             )
-            
+
             # 保存状态
             state = {
                 "pid": self.process.pid,
@@ -98,15 +98,23 @@ class Launcher(QObject):
                 "status": "running"
             }
             self._save_state(state)
-            
+
             # 启动日志读取线程
             import threading
             self.log_thread = threading.Thread(target=self._read_logs, daemon=True)
             self.log_thread.start()
-            
+
             self.process_started.emit(self.process.pid)
+
+            # 参数加载由 start_simulator.sh 通过 --params-file 自动完成
+            params_file = params.get('params_file', 'default')
+            if params_file and params_file != "default":
+                self.log_line.emit("INFO", f"参数配置将在节点启动后自动加载: {Path(params_file).name}")
+            else:
+                self.log_line.emit("INFO", "使用默认参数配置")
+
             return True
-            
+
         except Exception as e:
             self.log_line.emit("ERROR", f"启动失败: {str(e)}")
             return False
@@ -115,14 +123,19 @@ class Launcher(QObject):
         """构建启动命令"""
         start_script = self._find_start_script()
         cmd = ["bash", str(start_script)]
-        
+
         # 跳过构建（启动页面已确保构建完成）
         cmd.append("--skip-build")
-        
+
+        # 添加参数配置文件路径（由 start_simulator.sh 处理参数加载）
+        params_file = params.get('params_file', 'default')
+        if params_file and params_file != "default":
+            cmd.append(f"--params-file={params_file}")
+
         # 添加 launch 参数
         launch_args = self._params_to_args(params)
         cmd.extend(launch_args)
-        
+
         return cmd
     
     def _params_to_args(self, params: Dict[str, Any]) -> list:

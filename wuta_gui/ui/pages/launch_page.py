@@ -53,6 +53,7 @@ class LaunchPage(QWidget):
     def set_wuta_root(self, path: str):
         self.wuta_root = Path(path)
         self._load_tracks()
+        self._load_params_files()
 
     def _setup_ui(self):
         # 主布局
@@ -86,6 +87,10 @@ class LaunchPage(QWidget):
         # 赛道选择
         track_group = self._create_track_group()
         layout.addWidget(track_group)
+
+        # 参数配置选择
+        params_group = self._create_params_group()
+        layout.addWidget(params_group)
 
         # 选项区域
         options_group = self._create_options_group()
@@ -169,6 +174,67 @@ class LaunchPage(QWidget):
         group.setLayout(outer_layout)
 
         return group
+
+    def _create_params_group(self) -> QGroupBox:
+        group = QGroupBox("参数配置")
+        group.setStyleSheet(groupbox_style())
+
+        layout = QHBoxLayout(group)
+        layout.setSpacing(12)
+
+        params_label = QLabel("参数文件:")
+        params_label.setFont(font(FONT_NORMAL))
+        params_label.setStyleSheet(f"color: {COLORS['text_primary']};")
+        layout.addWidget(params_label)
+
+        self.params_combo = QComboBox()
+        self.params_combo.setMinimumWidth(240)
+        self.params_combo.setStyleSheet(combo_style())
+        layout.addWidget(self.params_combo)
+
+        refresh_params_btn = QPushButton("刷新")
+        refresh_params_btn.setFixedWidth(70)
+        refresh_params_btn.setStyleSheet(button_style('default'))
+        refresh_params_btn.clicked.connect(self._load_params_files)
+        layout.addWidget(refresh_params_btn)
+
+        layout.addStretch()
+
+        return group
+
+    def _load_params_files(self):
+        """加载可用参数配置文件"""
+        self.params_combo.clear()
+
+        if self.wuta_root is None:
+            self.params_combo.addItem("默认配置", "default")
+            return
+
+        params_dir = self.wuta_root / "wuta_gui" / "params"
+
+        if not params_dir.exists():
+            self.params_combo.addItem("默认配置", "default")
+            return
+
+        # 查找所有 YAML 参数文件
+        param_files = sorted(params_dir.glob("*.yaml"))
+
+        if not param_files:
+            self.params_combo.addItem("默认配置", "default")
+            return
+
+        # 默认参数文件名
+        default_file = "default_params.yaml"
+        default_index = 0
+
+        for i, param_path in enumerate(param_files):
+            display_name = param_path.stem
+            self.params_combo.addItem(display_name, str(param_path))
+            if param_path.name == default_file:
+                default_index = i
+
+        # 默认选中 default_params.yaml
+        self.params_combo.setCurrentIndex(default_index)
 
     def _load_tracks(self):
         """加载可用赛道文件"""
@@ -324,9 +390,15 @@ class LaunchPage(QWidget):
         if track_file is None:
             track_file = "default"
 
+        # 获取选中的参数配置文件
+        params_file = self.params_combo.currentData() if hasattr(self, 'params_combo') else "default"
+        if params_file is None:
+            params_file = "default"
+
         params = {
             "mission_mode": mode,
             "track_file": track_file,
+            "params_file": params_file,
             "launch_rviz": self.rviz_check.isChecked(),
             "auto_start": self.auto_start_check.isChecked(),
         }

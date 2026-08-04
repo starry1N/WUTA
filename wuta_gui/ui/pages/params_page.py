@@ -798,7 +798,29 @@ class ParamsPage(QWidget):
                 w.setText(str(value))
 
     def _save_params(self):
-        """保存参数到 YAML 文件"""
+        """保存参数到 YAML 文件（弹出文件名输入框）"""
+        from PyQt5.QtWidgets import QInputDialog
+
+        # 获取保存文件名
+        name, ok = QInputDialog.getText(
+            self,
+            "保存参数配置",
+            "请输入配置名称:",
+            text="my_config"
+        )
+        if not ok or not name.strip():
+            return
+
+        # 清理文件名
+        name = name.strip()
+        # 移除不合法的文件名字符
+        import re
+        name = re.sub(r'[^\w\-]', '_', name)
+
+        if not name:
+            self.feedback.emit("error", "配置名称无效")
+            return
+
         import yaml
 
         params = self.get_all_params()
@@ -808,15 +830,15 @@ class ParamsPage(QWidget):
 
         # 按节点分组
         node_params: Dict[str, Dict[str, Any]] = {}
-        for name, value in params.items():
-            node = self.PARAM_DEFS[name].get('node', 'unknown')
-            node_params.setdefault(node, {})[name] = value
+        for name_key, value in params.items():
+            node = self.PARAM_DEFS[name_key].get('node', 'unknown')
+            node_params.setdefault(node, {})[name_key] = value
 
         # 保存到 YAML
         save_data = {
             'metadata': {
-                'description': 'WUTA 参数配置文件',
-                'format': '按节点分组，启动时应用到对应节点',
+                'description': f'WUTA 参数配置文件 - {name}',
+                'format': '按节点分组，启动时通过 ros2 param load 应用到对应节点',
             },
             'parameters': node_params,
         }
@@ -824,7 +846,18 @@ class ParamsPage(QWidget):
         # 确保目录存在
         params_dir = self._get_params_dir()
         params_dir.mkdir(parents=True, exist_ok=True)
-        save_path = params_dir / 'user_params.yaml'
+        save_path = params_dir / f'{name}.yaml'
+
+        # 检查文件是否已存在
+        if save_path.exists():
+            reply = QMessageBox.question(
+                self,
+                "文件已存在",
+                f"配置文件 '{name}.yaml' 已存在，是否覆盖？",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply == QMessageBox.No:
+                return
 
         try:
             with open(save_path, 'w', encoding='utf-8') as f:
@@ -907,8 +940,21 @@ class ParamsPage(QWidget):
         self.fb_label.setText(f"{icon} {message}")
 
     def get_params_file_path(self) -> Optional[Path]:
-        """获取当前参数文件路径"""
-        params_file = self._get_params_dir() / 'user_params.yaml'
+        """获取默认参数文件路径"""
+        params_file = self._get_params_dir() / 'default_params.yaml'
         if params_file.exists():
             return params_file
+        # 如果没有默认文件，返回第一个找到的 yaml 文件
+        params_dir = self._get_params_dir()
+        if params_dir.exists():
+            yaml_files = list(params_dir.glob("*.yaml"))
+            if yaml_files:
+                return yaml_files[0]
         return None
+
+    def get_all_params_files(self) -> list:
+        """获取所有可用的参数配置文件"""
+        params_dir = self._get_params_dir()
+        if not params_dir.exists():
+            return []
+        return sorted(params_dir.glob("*.yaml"))
