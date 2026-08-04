@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QStackedWidget, QPushButton, QLabel, QFrame, QMessageBox
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import Qt
 
 from wuta_gui.core.launcher import Launcher
 from wuta_gui.core.system_subscriber import SystemSubscriber
@@ -20,73 +20,6 @@ from wuta_gui.ui.theme import (
     COLORS, FONT_DISPLAY, FONT_LARGE, FONT_SMALL,
     font, sidebar_button_style
 )
-
-
-class ParamSyncWorker(QThread):
-    """参数同步后台线程"""
-    finished = pyqtSignal(int, int, list)  # success_count, fail_count, errors
-
-    def __init__(self, params, param_defs, wuta_root):
-        super().__init__()
-        self.params = params
-        self.param_defs = param_defs
-        self.wuta_root = wuta_root
-
-    def run(self):
-        import subprocess
-        import os
-
-        fsd_setup = self.wuta_root / "WUTA-FSD/ros2_ws/install/setup.bash"
-        sim_setup = self.wuta_root / "WUTA-SIM/install/setup.bash"
-        node_name = "/simulation_bridge"
-
-        success_count = 0
-        fail_count = 0
-        errors = []
-
-        for param_name, value in self.params.items():
-            try:
-                param_def = self.param_defs.get(param_name, {})
-                param_type = param_def.get('type', 'string')
-
-                if param_type == 'bool':
-                    val_str = "true" if value else "false"
-                elif param_type == 'float':
-                    val_str = str(float(value))
-                elif param_type == 'int':
-                    val_str = str(int(value))
-                else:
-                    val_str = str(value)
-
-                cmd = f"""
-                    source /opt/ros/humble/setup.bash 2>/dev/null
-                    source "{fsd_setup}" 2>/dev/null
-                    source "{sim_setup}" 2>/dev/null
-                    ros2 param set {node_name} {param_name} {val_str}
-                """
-
-                result = subprocess.run(
-                    ["bash", "-c", cmd],
-                    capture_output=True, text=True, timeout=10,
-                    cwd=str(self.wuta_root),
-                    env={**os.environ}
-                )
-
-                if result.returncode == 0:
-                    success_count += 1
-                else:
-                    fail_count += 1
-                    error_msg = result.stderr.strip() if result.stderr else "未知错误"
-                    errors.append(f"{param_name}: {error_msg}")
-
-            except subprocess.TimeoutExpired:
-                fail_count += 1
-                errors.append(f"{param_name}: 超时")
-            except Exception as e:
-                fail_count += 1
-                errors.append(f"{param_name}: {str(e)}")
-
-        self.finished.emit(success_count, fail_count, errors)
 
 
 class MainWindow(QMainWindow):
@@ -203,7 +136,7 @@ class MainWindow(QMainWindow):
         self.build_page = BuildPage(str(self.wuta_root))
         self.launch_page = LaunchPage()
         self.launch_page.set_wuta_root(str(self.wuta_root))
-        self.params_page = ParamsPage()
+        self.params_page = ParamsPage(str(self.wuta_root))
         self.log_page = LogPage()
 
         self.pages.addWidget(self.build_page)    # 0
@@ -317,6 +250,7 @@ class MainWindow(QMainWindow):
             self.sidebar_buttons[0].setChecked(True)
             self._set_bottom("请先完成首次构建", 'normal')
             self.sidebar_buttons[1].setEnabled(False)
+            self.sidebar_buttons[2].setEnabled(False)
 
     def _is_built(self) -> bool:
         fsd_install = self.wuta_root / "WUTA-FSD/ros2_ws/install/setup.bash"
@@ -337,12 +271,12 @@ class MainWindow(QMainWindow):
         self.launch_page.launch_requested.connect(self._on_launch_requested)
         self.launch_page.stop_requested.connect(self._on_stop_requested)
         self.launch_page.manual_start_requested.connect(self._on_manual_start_requested)
-        self.params_page.params_sync_requested.connect(self._on_params_sync)
         self.params_page.feedback.connect(self._on_param_feedback)
 
     def _on_build_finished(self, success: bool, message: str):
         if success:
             self.sidebar_buttons[1].setEnabled(True)
+            self.sidebar_buttons[2].setEnabled(True)
             self._set_bottom("构建完成，可以启动仿真", 'success')
 
     def _switch_to_launch(self):
@@ -531,38 +465,15 @@ class MainWindow(QMainWindow):
     def _on_log_line(self, level, message):
         self.log_page.append_log(level, message)
 
-    def _on_params_sync(self, params: dict):
-        """批量同步参数到仿真"""
-        if not self.launcher.is_running():
-            self.params_page.feedback.emit("error", "仿真未运行，无法同步参数")
-            return
-        if not params:
-            self.params_page.feedback.emit("error", "没有可同步的参数")
-            return
-
-        self.params_page.feedback.emit("info", "正在同步参数...")
-
-        self._param_sync_worker = ParamSyncWorker(
-            params,
-            ParamsPage.PARAM_DEFS,
-            self.wuta_root
-        )
-        self._param_sync_worker.finished.connect(self._on_param_sync_finished)
-        self._param_sync_worker.start()
-
-    def _on_param_sync_finished(self, success_count: int, fail_count: int, errors: list):
-        if fail_count == 0:
-            self.params_page.feedback.emit("success", f"成功同步 {success_count} 个参数")
-        elif success_count == 0:
-            self.params_page.feedback.emit("error", f"同步失败: {'; '.join(errors[:3])}")
-        else:
-            self.params_page.feedback.emit("warning", f"成功 {success_count} 个，失败 {fail_count} 个")
-
     def _on_param_feedback(self, level: str, message: str):
         if level == "success":
             self._set_bottom(f"  ✓ {message}", 'success')
-        else:
+        elif level == "warning":
+            self._set_bottom(f"  ⚠ {message}", 'warning')
+        elif level == "error":
             self._set_bottom(f"  ✗ {message}", 'danger')
+        else:
+            self._set_bottom(f"  {message}", 'normal')
 
     def _set_bottom(self, text: str, status: str = 'normal'):
         color_map = {

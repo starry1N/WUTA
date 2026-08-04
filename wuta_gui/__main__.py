@@ -17,7 +17,7 @@ from pathlib import Path
 
 from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QFontDatabase
 
 
 def _ensure_ros_environment(wuta_root: Path) -> None:
@@ -108,6 +108,23 @@ def parse_arguments():
     return parser.parse_args()
 
 
+def _pick_font(size: int = 14) -> QFont:
+    """选择可用字体，优先中文字体以避免 Linux 下乱码"""
+    preferred = [
+        "Noto Sans CJK SC",
+        "WenQuanYi Micro Hei",
+        "WenQuanYi Zen Hei",
+        "Droid Sans Fallback",
+        "Source Han Sans SC",
+    ]
+    db = QFontDatabase()
+    available = db.families()
+    for name in preferred:
+        if name in available:
+            return QFont(name, size)
+    return QFont("Sans Serif", size)
+
+
 def main():
     """主函数"""
     # 解析参数
@@ -138,11 +155,11 @@ def main():
 
     # 创建应用
     app = QApplication(sys.argv)
-    app.setApplicationName("WUTA 仿真控制面板")
+    app.setApplicationName("WUTA SIM Panel")
     app.setApplicationVersion("1.0.0")
 
-    # 设置全局字体
-    font = QFont("Sans Serif", 14)
+    # 设置全局字体（Linux 需中文字体支持，避免乱码）
+    font = _pick_font(14)
     app.setFont(font)
 
     # 设置全局样式 - Apple 风格浅色主题
