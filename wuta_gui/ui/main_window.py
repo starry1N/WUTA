@@ -94,21 +94,21 @@ class MainWindow(QMainWindow):
 
     # 任务模式显示名称映射（使用整数常量，避免依赖 ROS 消息导入）
     MODE_DISPLAY_NAMES = {
-        0: "高速循迹",  # MISSION_TRACKDRIVE
-        1: "八字环绕",  # MISSION_SKIDPAD
-        2: "直线加速",  # MISSION_ACCELERATION
+        0: "TRACKDRIVE",     # MISSION_TRACKDRIVE
+        1: "SKIDPAD",        # MISSION_SKIDPAD
+        2: "ACCELERATION",   # MISSION_ACCELERATION
     }
 
     # 运行状态显示名称映射
     STATE_DISPLAY_NAMES = {
-        0: "空闲",       # IDLE
-        1: "就绪",       # READY
-        2: "检查",       # INSPECTION
-        3: "探索",       # EXPLORE
-        4: "建图完成",   # MAPPING_DONE
-        5: "比赛",       # RACE
-        6: "完成",       # FINISH
-        7: "急停",       # EMERGENCY
+        0: "IDLE",           # 空闲
+        1: "READY",          # 就绪
+        2: "INSPECTION",     # 检查
+        3: "EXPLORE",        # 探索
+        4: "MAPPING_DONE",   # 建图完成
+        5: "RACE",           # 比赛
+        6: "FINISH",         # 完成
+        7: "EMERGENCY",      # 急停
     }
 
     # 任务模式常量
@@ -131,6 +131,13 @@ class MainWindow(QMainWindow):
         # 计时数据缓存
         self._lap_times_cache = []
         self._current_lap_count = 0
+
+        # 直线加速实时状态（距离/速度来自真值，用时来自 lap_time）
+        self._accel_elapsed = 0.0
+        self._accel_finished = False
+        self._accel_last_distance = 0.0
+        self._accel_last_speed = 0.0
+        self._accel_track_length = 75.0  # 赛道长度（米），可从参数动态读取
 
         # 构建 UI
         self._setup_ui()
@@ -323,6 +330,7 @@ class MainWindow(QMainWindow):
         self.system_subscriber.ground_truth_received.connect(self._on_ground_truth_received)
         self.system_subscriber.lap_count_received.connect(self._on_lap_count_received)
         self.system_subscriber.lap_time_received.connect(self._on_lap_time_received)
+        self.system_subscriber.latency_received.connect(self._on_latency_received)
         self.launcher.process_started.connect(self._on_simulation_started)
         self.launcher.process_finished.connect(self._on_simulation_finished)
         self.launcher.log_line.connect(self._on_log_line)
@@ -354,7 +362,15 @@ class MainWindow(QMainWindow):
         if hasattr(self, '_last_mission_mode') and self._last_mission_mode != msg.mission_mode:
             self._lap_times_cache.clear()
             self._current_lap_count = 0
+            self._accel_elapsed = 0.0
+            self._accel_finished = False
+            self._accel_last_distance = 0.0
+            self._accel_last_speed = 0.0
         self._last_mission_mode = msg.mission_mode
+
+        # 直线加速模式：动态读取赛道长度配置
+        if msg.mission_mode == self.MISSION_ACCELERATION:
+            self._load_track_length_from_config()
 
     def _on_ground_truth_received(self, msg):
         """处理 ground_truth 消息"""
@@ -373,9 +389,31 @@ class MainWindow(QMainWindow):
         self.status_bar.set_velocity(speed)
         self.status_bar.set_pose(position.x, position.y, yaw_deg)
 
+        # 直线加速：从真值实时更新距离/速度
+        mission_mode = getattr(self, '_last_mission_mode', None)
+        if mission_mode == self.MISSION_ACCELERATION:
+            track_length = getattr(self, '_accel_track_length', 75.0)
+            distance = max(0.0, min(track_length, position.x))
+            self._accel_last_distance = distance
+            self._accel_last_speed = speed
+            self.timing_panel.update_acceleration(
+                distance=distance,
+                speed=speed,
+                elapsed=self._accel_elapsed,
+                finished=self._accel_finished,
+                track_length=track_length
+            )
+
+    def _on_latency_received(self, msg):
+        """处理 simulator_latency 消息（单位 s → ms）"""
+        self.status_bar.set_latency(msg.data * 1000.0)
+
     def _on_lap_count_received(self, msg):
-        """处理 lap_count 消息"""
+        """处理 lap_count 消息（mission_manager 仅对 trackdrive 发布正式圈次）"""
         self._current_lap_count = msg.data
+        mission_mode = getattr(self, '_last_mission_mode', self.MISSION_TRACKDRIVE)
+        if mission_mode != self.MISSION_TRACKDRIVE:
+            return
         self.timing_panel.update_trackdrive_lap(
             current_lap=msg.data,
             total_laps=3,
@@ -405,11 +443,15 @@ class MainWindow(QMainWindow):
                 all_segments=self._lap_times_cache.copy()
             )
         elif mission_mode == self.MISSION_ACCELERATION:
+            self._accel_elapsed = lap_time
+            self._accel_finished = True
+            track_length = getattr(self, '_accel_track_length', 75.0)
             self.timing_panel.update_acceleration(
-                distance=msg.data * 10,
-                speed=0,
+                distance=self._accel_last_distance,
+                speed=self._accel_last_speed,
                 elapsed=lap_time,
-                finished=len(self._lap_times_cache) >= 1
+                finished=True,
+                track_length=track_length
             )
 
     def _mode_to_string(self, mission_mode: int) -> str:
@@ -419,6 +461,36 @@ class MainWindow(QMainWindow):
             self.MISSION_ACCELERATION: "ACCELERATION",
         }
         return mode_map.get(mission_mode, "TRACKDRIVE")
+
+    def set_accel_track_length(self, length: float):
+        """设置直线加速赛道长度（动态更新 GUI 进度条范围）
+
+        Args:
+            length: 赛道长度（米）
+        """
+        self._accel_track_length = max(1.0, float(length))
+
+    def _load_track_length_from_config(self):
+        """从赛道配置文件中读取直线加速赛道长度"""
+        try:
+            import yaml
+            track_file = getattr(self, '_last_track_file', None)
+            if track_file is None:
+                # 默认读取 acceleration.yaml
+                track_path = Path(self.wuta_root) / "WUTA-SIM" / "perception_simulation" / "tracks" / "acceleration.yaml"
+            else:
+                track_path = Path(self.wuta_root) / "WUTA-SIM" / "perception_simulation" / "tracks" / f"{track_file}.yaml"
+
+            if track_path.exists():
+                with open(track_path, 'r', encoding='utf-8') as f:
+                    config = yaml.safe_load(f)
+                if config and 'track' in config and 'geometry' in config['track']:
+                    geo = config['track']['geometry']
+                    # 优先使用 finish_line_x，其次 acceleration_distance
+                    finish_x = geo.get('finish_line_x', geo.get('acceleration_distance', 75.0))
+                    self.set_accel_track_length(finish_x)
+        except Exception:
+            pass  # 读取失败时使用默认值 75m
 
     def _on_launch_requested(self, params: dict):
         success = self.launcher.launch(params)
@@ -437,15 +509,24 @@ class MainWindow(QMainWindow):
 
     def _on_simulation_started(self, pid: int):
         self._set_bottom(f"  仿真运行中  (PID: {pid})", 'success')
+        # 恢复 ROS 订阅
+        self.system_subscriber.resume()
         self.timing_panel.start_race()
 
     def _on_simulation_finished(self, exit_code: int):
         self._set_bottom(f"  仿真已停止  (退出码: {exit_code})", 'warning')
+        # 暂停 ROS 订阅，防止残留消息覆盖重置后的显示
+        self.system_subscriber.pause()
         self.timing_panel.stop_race()
         self.status_bar.reset_all()
-        self.timing_panel.reset_race()
+        self.timing_panel.reset_race(show_waiting=True)
         self._lap_times_cache.clear()
         self._current_lap_count = 0
+        self._accel_elapsed = 0.0
+        self._accel_finished = False
+        self._accel_last_distance = 0.0
+        self._accel_last_speed = 0.0
+        self._last_mission_mode = None
 
     def _on_log_line(self, level, message):
         self.log_page.append_log(level, message)

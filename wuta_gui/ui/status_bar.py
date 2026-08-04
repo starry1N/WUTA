@@ -146,6 +146,8 @@ class StatusBar(QWidget):
         self.lbl_y.value_label.setText("—")
         self.lbl_yaw.value_label.setText("—")
         self.lbl_latency.value_label.setText("—")
+        # 强制重绘确保 UI 更新
+        self.update()
 
     def set_mode(self, mode: str):
         self.lbl_mode.setText(mode or "—")

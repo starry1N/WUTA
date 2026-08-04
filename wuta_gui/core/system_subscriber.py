@@ -14,6 +14,7 @@ class SystemSubscriber(QObject):
     ground_truth_received = pyqtSignal(object)
     lap_count_received = pyqtSignal(object)
     lap_time_received = pyqtSignal(object)
+    latency_received = pyqtSignal(object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -59,6 +60,11 @@ class SystemSubscriber(QObject):
         UInt32 = self._ros_imports['UInt32']
         MissionState = self._ros_imports['MissionState']
 
+        # GUI 进程内初始化 rclpy（仅一次），否则 Node 构造会抛 NotInitializedException。
+        # args=[] 避免把 PyQt 命令行参数喂给 ROS 解析。
+        if not rclpy.ok():
+            rclpy.init(args=[])
+
         self.node = Node("wuta_gui_system_sub")
 
         # 创建发布者
@@ -78,11 +84,24 @@ class SystemSubscriber(QObject):
         self.node.create_subscription(
             Float64, "/system/lap_time", self._on_lap_time, 10
         )
+        self.node.create_subscription(
+            Float64, "/system/simulator_latency", self._on_latency, 10
+        )
 
         # 启动定时器
         self._timer = QTimer()
         self._timer.timeout.connect(self._spin)
         self._timer.start(interval_ms)
+
+    def pause(self):
+        """暂停订阅（仿真停止时调用，防止残留消息覆盖 UI）"""
+        if self._timer and self._timer.isActive():
+            self._timer.stop()
+
+    def resume(self):
+        """恢复订阅（仿真启动时调用）"""
+        if self._timer and not self._timer.isActive():
+            self._timer.start()
 
     def _spin(self):
         """定期调用 spin_once"""
@@ -100,6 +119,9 @@ class SystemSubscriber(QObject):
 
     def _on_lap_time(self, msg):
         self.lap_time_received.emit(msg)
+
+    def _on_latency(self, msg):
+        self.latency_received.emit(msg)
 
     def publish_start(self):
         """发布发车命令（如果 ROS 可用）"""
@@ -130,3 +152,7 @@ class SystemSubscriber(QObject):
         if self.node:
             self.node.destroy_node()
             self.node = None
+        if self._available:
+            rclpy = self._ros_imports['rclpy']
+            if rclpy.ok():
+                rclpy.shutdown()

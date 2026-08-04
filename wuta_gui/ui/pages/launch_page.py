@@ -375,7 +375,7 @@ class LaunchPage(QWidget):
             self.stop_button.setEnabled(False)
 
     def _on_emergency_clicked(self):
-        """急停"""
+        """急停 - 仅发送制动信号，不停止仿真进程"""
         reply = QMessageBox.warning(
             self,
             "紧急停止",
@@ -388,10 +388,9 @@ class LaunchPage(QWidget):
             main_window = self._find_main_window()
             if main_window and hasattr(main_window, 'system_subscriber'):
                 main_window.system_subscriber.publish_emergency()
-            # 同时停止仿真进程
-            self.stop_requested.emit()
-            self.launch_button.setEnabled(True)
-            self.stop_button.setEnabled(False)
+            # 不停止仿真进程，仅让车辆制动
+            if main_window:
+                main_window._set_bottom("🛑 急停已触发，车辆已制动", 'danger')
 
     def _find_main_window(self):
         """查找主窗口"""

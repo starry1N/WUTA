@@ -12,6 +12,7 @@ import os
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
 
 import argparse
+import subprocess
 from pathlib import Path
 
 from PyQt5.QtWidgets import QApplication, QMessageBox
@@ -19,20 +20,62 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
 
+def _ensure_ros_environment(wuta_root: Path) -> None:
+    """确保 ROS 环境已正确 source。
+
+    如果 wuta_msgs 无法导入，说明当前进程环境不完整。
+    此时自动重新执行自身（先 source 所有 setup 文件），
+    确保新进程拥有完整环境。
+    """
+    # 已 source 过（或首次启动就能导入），直接返回
+    try:
+        import wuta_msgs  # noqa: F401
+        return
+    except ImportError:
+        pass
+
+    # 需要 source 的 setup 文件
+    setup_files = [
+        "/opt/ros/humble/setup.bash",
+        str(wuta_root / "WUTA-FSD/ros2_ws/install/setup.bash"),
+        str(wuta_root / "WUTA-SIM/install/setup.bash"),
+    ]
+    existing_setup = [f for f in setup_files if os.path.isfile(f)]
+    if not existing_setup:
+        return  # 没有 setup 文件，无法修复
+
+    # 构造重新执行命令：source 所有 setup 后，用同一个 Python 重新运行
+    source_cmds = " && ".join(f'source "{s}"' for s in existing_setup)
+    # 使用当前 Python 解释器重新执行，传递原始参数
+    gui_args = " ".join(sys.argv[1:])
+    rerun_cmd = f'{source_cmds} && exec "{sys.executable}" -m wuta_gui {gui_args}'
+
+    print("[GUI] ROS environment not detected, restarting with proper setup...")
+    print(f"[GUI] Running: {rerun_cmd}")
+
+    # 用 exec 替换当前进程（如果 bash 支持的话），否则用 subprocess
+    result = subprocess.run(
+        ["bash", "-c", rerun_cmd],
+        cwd=str(wuta_root),
+    )
+    # 新进程已启动，退出当前进程
+    sys.exit(result.returncode)
+
+
 def check_dependencies():
     """检查必要的依赖（仅检查 PyQt5 和 yaml，不检查 ROS）"""
     missing = []
-    
+
     try:
         import PyQt5
     except ImportError:
         missing.append("PyQt5")
-    
+
     try:
         import yaml
     except ImportError:
         missing.append("pyyaml")
-    
+
     return missing
 
 
@@ -42,13 +85,13 @@ def find_wuta_root() -> Path:
     current = Path.cwd()
     if (current / "start_simulator.sh").exists():
         return current
-    
+
     # 向上查找（最多3层）
     for _ in range(3):
         current = current.parent
         if (current / "start_simulator.sh").exists():
             return current
-    
+
     # 如果找不到，使用默认路径
     return Path.cwd()
 
@@ -69,18 +112,21 @@ def main():
     """主函数"""
     # 解析参数
     args = parse_arguments()
-    
+
     # 确定 WUTA 根目录
     if args.wuta_root:
         wuta_root = Path(args.wuta_root).resolve()
     else:
         wuta_root = find_wuta_root()
-    
+
     # 检查 WUTA 根目录是否存在
     if not wuta_root.exists():
         print(f"错误: WUTA 根目录不存在: {wuta_root}")
         sys.exit(1)
-    
+
+    # 确保 ROS 环境已 source（必要时重启自身）
+    _ensure_ros_environment(wuta_root)
+
     # 检查必要依赖（仅 PyQt5 和 yaml）
     missing_deps = check_dependencies()
     if missing_deps:
@@ -89,16 +135,16 @@ def main():
             print(f"  - {dep}")
         print("\n请安装缺失的依赖后重试")
         sys.exit(1)
-    
+
     # 创建应用
     app = QApplication(sys.argv)
     app.setApplicationName("WUTA 仿真控制面板")
     app.setApplicationVersion("1.0.0")
-    
+
     # 设置全局字体
     font = QFont("Sans Serif", 14)
     app.setFont(font)
-    
+
     # 设置全局样式 - Apple 风格浅色主题
     app.setStyleSheet("""
         QMainWindow {
@@ -197,17 +243,17 @@ def main():
             background-color: #e8e8ed;
         }
     """)
-    
+
     # 创建主窗口
     from wuta_gui.ui.main_window import MainWindow
-    
+
     try:
         window = MainWindow(str(wuta_root))
         window.show()
     except Exception as e:
         QMessageBox.critical(None, "启动失败", f"无法启动控制面板:\n{str(e)}")
         sys.exit(1)
-    
+
     # 运行应用
     sys.exit(app.exec_())
 

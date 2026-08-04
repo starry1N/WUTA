@@ -348,13 +348,6 @@ class SimulationBridge(Node):
         if lap_time_s < self.timing_min_lap_duration:
             return
 
-        # For skidpad: verify minimum distance traveled to avoid false trigger
-        if is_skidpad and previous is not None:
-            dx = msg.pose.pose.position.x - previous.pose.pose.position.x
-            dy = msg.pose.pose.position.y - previous.pose.pose.position.y
-            if (dx * dx + dy * dy) ** 0.5 < 5.0:
-                return
-
         self.latest_lap_time_s = lap_time_s
         out = Float64()
         out.data = lap_time_s

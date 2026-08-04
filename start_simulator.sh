@@ -239,7 +239,7 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
       colcon build \
         --base-paths . \
         --symlink-install \
-        --parallel-workers 2 \
+        --parallel-workers 1 \
         --packages-up-to simulator_bringup
     else
       colcon build \
