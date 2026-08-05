@@ -444,6 +444,8 @@ class LaunchPage(QWidget):
             # 通过主窗口的 system_subscriber 发送急停信号
             main_window = self._find_main_window()
             if main_window and hasattr(main_window, 'system_subscriber'):
+                if not main_window._ensure_ros_ready():
+                    return
                 main_window.system_subscriber.publish_emergency()
             # 不停止仿真进程，仅让车辆制动
             if main_window:

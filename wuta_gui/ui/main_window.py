@@ -162,28 +162,22 @@ class MainWindow(QMainWindow):
         layout.setSpacing(4)
         layout.setContentsMargins(10, 16, 10, 10)
 
-        # Logo 区域
+        # Logo 区域（铺满侧边栏可用宽度，保持宽高比）
         logo_label = QLabel()
         logo_label.setAlignment(Qt.AlignCenter)
-        logo_label.setStyleSheet("padding: 8px 8px 12px 8px;")
 
         logo_path = Path(__file__).parent.parent / "assets" / "logo.png"
         if logo_path.exists():
             pixmap = QPixmap(str(logo_path))
-            pixmap = pixmap.scaledToHeight(40, Qt.SmoothTransformation)
+            # 侧边栏固定宽 140、左右边距各 10 → 按可用宽度等比缩放
+            pixmap = pixmap.scaledToWidth(120, Qt.SmoothTransformation)
             logo_label.setPixmap(pixmap)
         else:
             logo_label.setText("WUTA")
             logo_label.setFont(font(FONT_DISPLAY, bold=True))
-            logo_label.setStyleSheet(f"color: {COLORS['accent']}; padding: 8px 8px 12px 8px;")
+            logo_label.setStyleSheet(f"color: {COLORS['accent']};")
 
         layout.addWidget(logo_label)
-
-        # 分隔
-        sep = QFrame()
-        sep.setFrameShape(QFrame.HLine)
-        sep.setStyleSheet(f"background-color: {COLORS['separator']}; max-height: 1px;")
-        layout.addWidget(sep)
         layout.addSpacing(8)
 
         buttons = [
@@ -263,10 +257,21 @@ class MainWindow(QMainWindow):
         self.params_page.feedback.connect(self._on_param_feedback)
 
     def _on_build_finished(self, success: bool, message: str):
-        if success:
-            self.sidebar_buttons[1].setEnabled(True)
-            self.sidebar_buttons[2].setEnabled(True)
-            self._set_bottom("构建完成，可以启动仿真", 'success')
+        if not success:
+            return
+        self.sidebar_buttons[1].setEnabled(True)
+        self.sidebar_buttons[2].setEnabled(True)
+        # 当前进程未加载 ROS 环境（如从无 ROS 模式构建）→ 重启加载，
+        # 否则后续发车/订阅都不会生效
+        if not self.system_subscriber.available:
+            from wuta_gui.__main__ import restart_with_ros_environment
+            self.hide()
+            restart_with_ros_environment(
+                self.wuta_root,
+                "Build finished. Restarting GUI with ROS environment loaded...",
+            )
+            return
+        self._set_bottom("构建完成，可以启动仿真", 'success')
 
     def _switch_to_launch(self):
         self.pages.setCurrentIndex(1)
@@ -402,7 +407,39 @@ class MainWindow(QMainWindow):
         except Exception:
             pass  # 读取失败时使用默认值 75m
 
+    def _ensure_ros_ready(self) -> bool:
+        """确保当前 GUI 进程已加载 ROS 环境（必要时重启自身）。
+
+        工作区已构建但本进程未加载 ROS 时，发车/订阅都不会生效。
+        此时询问用户是否重启；返回 True 表示可以继续操作。
+        """
+        if self.system_subscriber.available:
+            return True
+        if not workspace.is_built(self.wuta_root):
+            return True  # 未构建时无 ROS 属正常，按现有逻辑处理
+
+        reply = QMessageBox.question(
+            self, "重启 GUI",
+            "工作区已构建，但当前 GUI 进程未加载 ROS 环境，\n"
+            "车辆状态与计时需要 ROS 才能工作。\n"
+            "重启后将加载完整环境，请重新点击启动/发车。\n\n"
+            "是否立即重启？",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return False
+
+        from wuta_gui.__main__ import restart_with_ros_environment
+        self.hide()
+        restart_with_ros_environment(
+            self.wuta_root,
+            "Restarting GUI with ROS environment loaded...",
+        )
+        return False
+
     def _on_launch_requested(self, params: dict):
+        if not self._ensure_ros_ready():
+            return
         success = self.launcher.launch(params)
         if success:
             self.log_page.set_log_file(self.launcher.get_log_file())
@@ -414,6 +451,8 @@ class MainWindow(QMainWindow):
 
     def _on_manual_start_requested(self):
         """处理手动发车请求"""
+        if not self._ensure_ros_ready():
+            return
         self.system_subscriber.publish_start()
         self._set_bottom("手动发车信号已发送", 'success')
 

@@ -397,6 +397,60 @@ def toggle_style() -> str:
     """
 
 
+def dialog_style() -> str:
+    """QDialog / QInputDialog 统一样式 - Apple 风格（与 QMessageBox 一致）"""
+    return f"""
+        QDialog, QInputDialog {{
+            background-color: {COLORS['bg_secondary']};
+            color: {COLORS['text_primary']};
+        }}
+        QDialog QLabel, QInputDialog QLabel {{
+            color: {COLORS['text_primary']};
+            font-size: {FONT_NORMAL}px;
+        }}
+        QDialog QLineEdit, QInputDialog QLineEdit {{
+            border: 1px solid {COLORS['border']};
+            border-radius: 8px;
+            padding: 7px 10px;
+            background-color: {COLORS['bg_primary']};
+            color: {COLORS['text_primary']};
+            font-size: {FONT_NORMAL}px;
+            selection-background-color: {COLORS['accent']};
+            selection-color: white;
+        }}
+        QDialog QLineEdit:hover, QInputDialog QLineEdit:hover {{
+            border-color: {COLORS['accent']};
+        }}
+        QDialog QLineEdit:focus, QInputDialog QLineEdit:focus {{
+            border-color: {COLORS['accent']};
+        }}
+        QDialog QPushButton, QInputDialog QPushButton {{
+            background-color: {COLORS['bg_secondary']};
+            color: {COLORS['text_primary']};
+            border: 1px solid {COLORS['border']};
+            border-radius: 8px;
+            padding: 8px 20px;
+            font-size: {FONT_NORMAL}px;
+            font-weight: 500;
+            min-width: 70px;
+        }}
+        QDialog QPushButton:hover, QInputDialog QPushButton:hover {{
+            background-color: {COLORS['hover_bg']};
+        }}
+        QDialog QPushButton:pressed, QInputDialog QPushButton:pressed {{
+            background-color: {COLORS['separator']};
+        }}
+        QDialog QPushButton[default="true"], QInputDialog QPushButton[default="true"] {{
+            background-color: {COLORS['accent']};
+            color: white;
+            border-color: {COLORS['accent']};
+        }}
+        QDialog QPushButton[default="true"]:hover, QInputDialog QPushButton[default="true"]:hover {{
+            background-color: {COLORS['accent_hover']};
+        }}
+    """
+
+
 def global_style() -> str:
     """应用级全局样式 - 兜底默认控件样式（Apple 风格）
 
@@ -435,6 +489,7 @@ def global_style() -> str:
             spacing: 8px;
         }}
         {messagebox_style()}
+        {dialog_style()}
     """
 
 
