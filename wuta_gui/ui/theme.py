@@ -364,6 +364,80 @@ def messagebox_style() -> str:
     """
 
 
+def textedit_style() -> str:
+    """只读文本框样式（日志/构建输出）"""
+    return f"""
+        QTextEdit {{
+            background-color: {COLORS['bg_primary']};
+            color: {COLORS['text_primary']};
+            border: 1px solid {COLORS['separator']};
+            border-radius: 10px;
+            padding: 12px;
+        }}
+    """
+
+
+def toggle_style() -> str:
+    """可切换按钮样式 - 选中态高亮"""
+    return f"""
+        QPushButton {{
+            background-color: {COLORS['bg_secondary']};
+            color: {COLORS['text_primary']};
+            border: 1px solid {COLORS['separator']};
+            border-radius: 10px;
+            padding: 8px 16px;
+            font-size: {FONT_NORMAL}px;
+        }}
+        QPushButton:hover {{ background-color: {COLORS['hover_bg']}; }}
+        QPushButton:checked {{
+            background-color: {COLORS['accent']};
+            color: white;
+            border-color: {COLORS['accent']};
+        }}
+    """
+
+
+def global_style() -> str:
+    """应用级全局样式 - 兜底默认控件样式（Apple 风格）
+
+    页面内控件已通过本模块函数显式设置样式；
+    这里兜底对话框等未显式样式的控件，保证整体风格统一。
+    """
+    return f"""
+        QMainWindow {{ background-color: {COLORS['bg_primary']}; }}
+        QLabel {{ color: {COLORS['text_primary']}; }}
+        QPushButton {{
+            background-color: {COLORS['accent']};
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 20px;
+            font-size: {FONT_NORMAL}px;
+        }}
+        QPushButton:hover {{ background-color: {COLORS['accent_hover']}; }}
+        QPushButton:pressed {{ background-color: {COLORS['accent_pressed']}; }}
+        QPushButton:disabled {{
+            background-color: {COLORS['border']};
+            color: {COLORS['text_tertiary']};
+        }}
+        QComboBox, QLineEdit {{
+            border: 1px solid {COLORS['border']};
+            border-radius: 8px;
+            padding: 6px 12px;
+            background-color: {COLORS['bg_secondary']};
+            color: {COLORS['text_primary']};
+            font-size: {FONT_NORMAL}px;
+        }}
+        QComboBox:hover, QLineEdit:hover {{ border-color: {COLORS['accent']}; }}
+        QCheckBox, QRadioButton {{
+            font-size: {FONT_NORMAL}px;
+            color: {COLORS['text_primary']};
+            spacing: 8px;
+        }}
+        {messagebox_style()}
+    """
+
+
 def sidebar_button_style() -> str:
     """侧边栏按钮样式 - Apple 风格导航按钮"""
     return f"""

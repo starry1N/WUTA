@@ -16,8 +16,10 @@ import subprocess
 from pathlib import Path
 
 from PyQt5.QtWidgets import QApplication, QMessageBox
-from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QFontDatabase
+
+from wuta_gui.core import workspace
+from wuta_gui.ui import theme
 
 
 def _ensure_ros_environment(wuta_root: Path) -> None:
@@ -34,13 +36,8 @@ def _ensure_ros_environment(wuta_root: Path) -> None:
     except ImportError:
         pass
 
-    # 需要 source 的 setup 文件
-    setup_files = [
-        "/opt/ros/humble/setup.bash",
-        str(wuta_root / "WUTA-FSD/ros2_ws/install/setup.bash"),
-        str(wuta_root / "WUTA-SIM/install/setup.bash"),
-    ]
-    existing_setup = [f for f in setup_files if os.path.isfile(f)]
+    # 需要 source 的 setup 文件（仅存在的）
+    existing_setup = workspace.setup_files(wuta_root)
     if not existing_setup:
         return  # 没有 setup 文件，无法修复
 
@@ -81,19 +78,7 @@ def check_dependencies():
 
 def find_wuta_root() -> Path:
     """自动查找 WUTA 根目录"""
-    # 首先检查当前目录
-    current = Path.cwd()
-    if (current / "start_simulator.sh").exists():
-        return current
-
-    # 向上查找（最多3层）
-    for _ in range(3):
-        current = current.parent
-        if (current / "start_simulator.sh").exists():
-            return current
-
-    # 如果找不到，使用默认路径
-    return Path.cwd()
+    return workspace.find_wuta_root()
 
 
 def parse_arguments():
@@ -162,104 +147,8 @@ def main():
     font = _pick_font(14)
     app.setFont(font)
 
-    # 设置全局样式 - Apple 风格浅色主题
-    app.setStyleSheet("""
-        QMainWindow {
-            background-color: #f5f5f7;
-        }
-        QGroupBox {
-            font-weight: 600;
-            font-size: 15px;
-            border: 1px solid #d2d2d7;
-            border-radius: 10px;
-            margin-top: 12px;
-            padding-top: 16px;
-            background-color: #ffffff;
-        }
-        QGroupBox::title {
-            subcontrol-origin: margin;
-            left: 16px;
-            padding: 0 8px;
-            color: #1d1d1f;
-        }
-        QPushButton {
-            background-color: #0071e3;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            padding: 8px 20px;
-            font-weight: 500;
-            font-size: 14px;
-        }
-        QPushButton:hover {
-            background-color: #0077ed;
-        }
-        QPushButton:pressed {
-            background-color: #0068d0;
-        }
-        QPushButton:disabled {
-            background-color: #d2d2d7;
-            color: #8e8e93;
-        }
-        QComboBox {
-            border: 1px solid #d2d2d7;
-            border-radius: 8px;
-            padding: 6px 12px;
-            background-color: white;
-            min-height: 24px;
-        }
-        QComboBox:hover {
-            border-color: #0071e3;
-        }
-        QComboBox::drop-down {
-            border: none;
-            width: 24px;
-        }
-        QCheckBox {
-            font-size: 14px;
-            color: #1d1d1f;
-            spacing: 8px;
-        }
-        QCheckBox::indicator {
-            width: 18px;
-            height: 18px;
-        }
-        QRadioButton {
-            font-size: 14px;
-            color: #1d1d1f;
-            spacing: 8px;
-        }
-        QRadioButton::indicator {
-            width: 18px;
-            height: 18px;
-        }
-        QLabel {
-            color: #1d1d1f;
-        }
-        QMessageBox {
-            background-color: #ffffff;
-        }
-        QMessageBox QLabel {
-            color: #1d1d1f;
-            font-size: 13px;
-        }
-        QMessageBox QPushButton {
-            background-color: #ffffff;
-            color: #1d1d1f;
-            border: 1px solid #d2d2d7;
-            border-radius: 8px;
-            padding: 8px 20px;
-            font-size: 13px;
-            font-weight: 500;
-            min-width: 70px;
-        }
-        QMessageBox QPushButton:hover {
-            background-color: #f0f0f2;
-        }
-        QPushButton:pressed {
-            background-color: #e8e8ed;
-        }
-    """)
+    # 设置全局样式（Apple 风格浅色主题，统一定义于 theme.py）
+    app.setStyleSheet(theme.global_style())
 
     # 创建主窗口
     from wuta_gui.ui.main_window import MainWindow

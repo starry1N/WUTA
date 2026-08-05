@@ -1,13 +1,15 @@
 """构建管理模块 - 复用 start_simulator.sh"""
 
-import os
+import re
+import subprocess
 import time
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 from PyQt5.QtCore import QThread
 from PyQt5.QtCore import pyqtSignal
+
+from wuta_gui.core import workspace
 
 
 class BuildMode(Enum):
@@ -56,7 +58,6 @@ class Builder(QThread):
             self.log_line.emit(f"执行命令: {' '.join(cmd)}")
             
             # 启动进程
-            import subprocess
             self.process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -67,7 +68,6 @@ class Builder(QThread):
             )
             
             # 读取输出
-            last_progress = 0
             start_time = time.time()
             
             for line in iter(self.process.stdout.readline, ''):
@@ -95,27 +95,9 @@ class Builder(QThread):
         except Exception as e:
             self.finished.emit(False, f"构建异常: {str(e)}")
     
-    def _find_start_script(self) -> Path:
-        """查找 start_simulator.sh 脚本"""
-        # 首先检查 wuta_root 下是否有
-        script = self.wuta_root / "start_simulator.sh"
-        if script.exists():
-            return script
-        
-        # 向上查找（最多3层）
-        current = self.wuta_root
-        for _ in range(3):
-            current = current.parent
-            script = current / "start_simulator.sh"
-            if script.exists():
-                return script
-        
-        # 如果都找不到，返回默认路径（会报错但给出清晰提示）
-        return self.wuta_root / "start_simulator.sh"
-    
     def _build_command(self) -> list:
         """构建命令"""
-        start_script = self._find_start_script()
+        start_script = workspace.find_start_script(self.wuta_root)
         cmd = ["bash", str(start_script)]
         
         if self.mode == BuildMode.CLEAN:
@@ -146,7 +128,6 @@ class Builder(QThread):
         
         # 解析完成信息
         if "packages finished" in line:
-            import re
             match = re.search(r'(\d+) packages finished', line)
             if match:
                 count = int(match.group(1))

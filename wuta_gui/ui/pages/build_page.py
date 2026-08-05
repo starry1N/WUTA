@@ -13,7 +13,7 @@ from wuta_gui.core.builder import Builder, BuildMode
 from wuta_gui.ui.theme import (
     COLORS, FONT_DISPLAY, FONT_LARGE, FONT_SMALL,
     font, mono_font, groupbox_style, radio_check_style, button_style,
-    scroll_style
+    scroll_style, textedit_style
 )
 
 
@@ -99,15 +99,7 @@ class BuildPage(QWidget):
         self.log_text.setReadOnly(True)
         self.log_text.setFont(mono_font(FONT_SMALL))
         self.log_text.setMinimumHeight(200)
-        self.log_text.setStyleSheet(f"""
-            QTextEdit {{
-                background-color: {COLORS['bg_primary']};
-                color: {COLORS['text_primary']};
-                border: 1px solid {COLORS['separator']};
-                border-radius: 8px;
-                padding: 12px;
-            }}
-        """)
+        self.log_text.setStyleSheet(textedit_style())
         log_layout.addWidget(self.log_text)
         layout.addWidget(log_group)
 

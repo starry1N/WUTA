@@ -7,7 +7,7 @@ from PyQt5.QtCore import Qt, QTimer
 
 from wuta_gui.ui.theme import (
     COLORS, FONT_TITLE, FONT_LARGE, FONT_NORMAL, FONT_SMALL,
-    font, mono_font
+    font, mono_font, card_style
 )
 
 
@@ -82,9 +82,7 @@ class TimingPanel(QWidget):
         label.setAlignment(Qt.AlignCenter)
         label.setStyleSheet(f"""
             color: {COLORS['text_secondary']};
-            background-color: {COLORS['bg_secondary']};
-            border: 1px solid {COLORS['separator']};
-            border-radius: 12px;
+            {card_style(radius=12)}
             padding: 20px;
         """)
         self.content_layout.addWidget(label)
@@ -136,11 +134,7 @@ class TimingPanel(QWidget):
                           value_size: int = FONT_LARGE) -> QFrame:
         """创建信息卡片 - 不限制宽度，保证文字完整"""
         card = QFrame()
-        card.setStyleSheet(f"""
-            background-color: {COLORS['bg_secondary']};
-            border: 1px solid {COLORS['separator']};
-            border-radius: 10px;
-        """)
+        card.setStyleSheet(card_style(radius=10))
         layout = QVBoxLayout(card)
         layout.setContentsMargins(12, 8, 12, 8)
         layout.setSpacing(2)
@@ -292,20 +286,12 @@ class TimingPanel(QWidget):
 
         # 空白卡片保持对齐
         empty = QFrame()
-        empty.setStyleSheet(f"""
-            background-color: {COLORS['bg_secondary']};
-            border: 1px solid {COLORS['separator']};
-            border-radius: 10px;
-        """)
+        empty.setStyleSheet(card_style(radius=10))
         laps_row.addWidget(empty, 1)
 
         # 另一个空白卡片保持对齐
         empty2 = QFrame()
-        empty2.setStyleSheet(f"""
-            background-color: {COLORS['bg_secondary']};
-            border: 1px solid {COLORS['separator']};
-            border-radius: 10px;
-        """)
+        empty2.setStyleSheet(card_style(radius=10))
         laps_row.addWidget(empty2, 1)
 
         self.content_layout.addLayout(laps_row)

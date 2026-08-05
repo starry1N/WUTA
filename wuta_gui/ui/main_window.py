@@ -1,13 +1,17 @@
 """主窗口 - 常驻顶栏 + 侧边栏 + 页面切换（Apple 风格）"""
 
+import math
 from pathlib import Path
 
+import yaml
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QStackedWidget, QPushButton, QLabel, QFrame, QMessageBox
 )
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QPixmap
 
+from wuta_gui.core import modes, workspace
 from wuta_gui.core.launcher import Launcher
 from wuta_gui.core.system_subscriber import SystemSubscriber
 from wuta_gui.ui.status_bar import StatusBar
@@ -25,13 +29,6 @@ from wuta_gui.ui.theme import (
 class MainWindow(QMainWindow):
     """主窗口：常驻顶栏 + 侧边栏 + 页面切换"""
 
-    # 任务模式显示名称映射（使用整数常量，避免依赖 ROS 消息导入）
-    MODE_DISPLAY_NAMES = {
-        0: "TRACKDRIVE",     # MISSION_TRACKDRIVE
-        1: "SKIDPAD",        # MISSION_SKIDPAD
-        2: "ACCELERATION",   # MISSION_ACCELERATION
-    }
-
     # 运行状态显示名称映射
     STATE_DISPLAY_NAMES = {
         0: "IDLE",           # 空闲
@@ -43,11 +40,6 @@ class MainWindow(QMainWindow):
         6: "FINISH",         # 完成
         7: "EMERGENCY",      # 急停
     }
-
-    # 任务模式常量
-    MISSION_TRACKDRIVE = 0
-    MISSION_SKIDPAD = 1
-    MISSION_ACCELERATION = 2
 
     def __init__(self, wuta_root: str, parent=None):
         super().__init__(parent)
@@ -177,7 +169,6 @@ class MainWindow(QMainWindow):
 
         logo_path = Path(__file__).parent.parent / "assets" / "logo.png"
         if logo_path.exists():
-            from PyQt5.QtGui import QPixmap
             pixmap = QPixmap(str(logo_path))
             pixmap = pixmap.scaledToHeight(40, Qt.SmoothTransformation)
             logo_label.setPixmap(pixmap)
@@ -253,9 +244,7 @@ class MainWindow(QMainWindow):
             self.sidebar_buttons[2].setEnabled(False)
 
     def _is_built(self) -> bool:
-        fsd_install = self.wuta_root / "WUTA-FSD/ros2_ws/install/setup.bash"
-        sim_install = self.wuta_root / "WUTA-SIM/install/setup.bash"
-        return fsd_install.exists() and sim_install.exists()
+        return workspace.is_built(self.wuta_root)
 
     def _connect_signals(self):
         self.build_page.request_switch_to_launch.connect(self._switch_to_launch)
@@ -286,9 +275,9 @@ class MainWindow(QMainWindow):
 
     def _on_mission_state_received(self, msg):
         """处理 mission_state 消息"""
-        mode_name = self.MODE_DISPLAY_NAMES.get(msg.mission_mode, "未知")
+        mode_name = modes.MODE_STRINGS.get(msg.mission_mode, "未知")
         self.status_bar.set_mode(mode_name)
-        self.timing_panel.set_mode(self._mode_to_string(msg.mission_mode))
+        self.timing_panel.set_mode(modes.mode_string(msg.mission_mode))
 
         state_name = self.STATE_DISPLAY_NAMES.get(msg.state, "未知")
         self.status_bar.set_state(state_name)
@@ -303,7 +292,7 @@ class MainWindow(QMainWindow):
         self._last_mission_mode = msg.mission_mode
 
         # 直线加速模式：动态读取赛道长度配置
-        if msg.mission_mode == self.MISSION_ACCELERATION:
+        if msg.mission_mode == modes.MODE_ACCELERATION:
             self._load_track_length_from_config()
 
     def _on_ground_truth_received(self, msg):
@@ -312,7 +301,6 @@ class MainWindow(QMainWindow):
         velocity = msg.twist.twist.linear
         speed = (velocity.x * velocity.x + velocity.y * velocity.y) ** 0.5
 
-        import math
         orientation = msg.pose.pose.orientation
         yaw = math.atan2(
             2.0 * (orientation.w * orientation.z + orientation.x * orientation.y),
@@ -325,7 +313,7 @@ class MainWindow(QMainWindow):
 
         # 直线加速：从真值实时更新距离/速度
         mission_mode = getattr(self, '_last_mission_mode', None)
-        if mission_mode == self.MISSION_ACCELERATION:
+        if mission_mode == modes.MODE_ACCELERATION:
             track_length = getattr(self, '_accel_track_length', 75.0)
             distance = max(0.0, min(track_length, position.x))
             self._accel_last_distance = distance
@@ -345,8 +333,8 @@ class MainWindow(QMainWindow):
     def _on_lap_count_received(self, msg):
         """处理 lap_count 消息（mission_manager 仅对 trackdrive 发布正式圈次）"""
         self._current_lap_count = msg.data
-        mission_mode = getattr(self, '_last_mission_mode', self.MISSION_TRACKDRIVE)
-        if mission_mode != self.MISSION_TRACKDRIVE:
+        mission_mode = getattr(self, '_last_mission_mode', modes.MODE_TRACKDRIVE)
+        if mission_mode != modes.MODE_TRACKDRIVE:
             return
         self.timing_panel.update_trackdrive_lap(
             current_lap=msg.data,
@@ -361,22 +349,22 @@ class MainWindow(QMainWindow):
         if lap_time not in self._lap_times_cache:
             self._lap_times_cache.append(lap_time)
 
-        mission_mode = getattr(self, '_last_mission_mode', self.MISSION_TRACKDRIVE)
-        if mission_mode == self.MISSION_TRACKDRIVE:
+        mission_mode = getattr(self, '_last_mission_mode', modes.MODE_TRACKDRIVE)
+        if mission_mode == modes.MODE_TRACKDRIVE:
             self.timing_panel.update_trackdrive_lap(
                 current_lap=self._current_lap_count,
                 total_laps=3,
                 last_lap_time=lap_time,
                 all_times=self._lap_times_cache.copy()
             )
-        elif mission_mode == self.MISSION_SKIDPAD:
+        elif mission_mode == modes.MODE_SKIDPAD:
             self.timing_panel.update_skidpad(
                 segment=len(self._lap_times_cache),
                 total_segments=4,
                 segment_time=lap_time,
                 all_segments=self._lap_times_cache.copy()
             )
-        elif mission_mode == self.MISSION_ACCELERATION:
+        elif mission_mode == modes.MODE_ACCELERATION:
             self._accel_elapsed = lap_time
             self._accel_finished = True
             track_length = getattr(self, '_accel_track_length', 75.0)
@@ -387,14 +375,6 @@ class MainWindow(QMainWindow):
                 finished=True,
                 track_length=track_length
             )
-
-    def _mode_to_string(self, mission_mode: int) -> str:
-        mode_map = {
-            self.MISSION_TRACKDRIVE: "TRACKDRIVE",
-            self.MISSION_SKIDPAD: "SKIDPAD",
-            self.MISSION_ACCELERATION: "ACCELERATION",
-        }
-        return mode_map.get(mission_mode, "TRACKDRIVE")
 
     def set_accel_track_length(self, length: float):
         """设置直线加速赛道长度（动态更新 GUI 进度条范围）
@@ -407,13 +387,9 @@ class MainWindow(QMainWindow):
     def _load_track_length_from_config(self):
         """从赛道配置文件中读取直线加速赛道长度"""
         try:
-            import yaml
             track_file = getattr(self, '_last_track_file', None)
-            if track_file is None:
-                # 默认读取 acceleration.yaml
-                track_path = Path(self.wuta_root) / "WUTA-SIM" / "perception_simulation" / "tracks" / "acceleration.yaml"
-            else:
-                track_path = Path(self.wuta_root) / "WUTA-SIM" / "perception_simulation" / "tracks" / f"{track_file}.yaml"
+            track_name = track_file if track_file else "acceleration"
+            track_path = workspace.tracks_dir(self.wuta_root) / f"{track_name}.yaml"
 
             if track_path.exists():
                 with open(track_path, 'r', encoding='utf-8') as f:

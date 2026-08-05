@@ -12,7 +12,7 @@ from PyQt5.QtGui import QTextCursor
 
 from wuta_gui.ui.theme import (
     COLORS, FONT_DISPLAY, FONT_NORMAL, FONT_SMALL,
-    font, mono_font, button_style
+    font, mono_font, button_style, textedit_style, toggle_style
 )
 
 
@@ -74,15 +74,7 @@ class LogPage(QWidget):
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
         self.log_text.setFont(mono_font(FONT_SMALL))
-        self.log_text.setStyleSheet(f"""
-            QTextEdit {{
-                background-color: {COLORS['bg_primary']};
-                color: {COLORS['text_primary']};
-                border: 1px solid {COLORS['separator']};
-                border-radius: 10px;
-                padding: 12px;
-            }}
-        """)
+        self.log_text.setStyleSheet(textedit_style())
         layout.addWidget(self.log_text)
 
         # 工具栏
@@ -97,22 +89,7 @@ class LogPage(QWidget):
         self.btn_scroll = QPushButton("⏩  自动滚动")
         self.btn_scroll.setCheckable(True)
         self.btn_scroll.setChecked(True)
-        self.btn_scroll.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {COLORS['bg_secondary']};
-                color: {COLORS['text_primary']};
-                border: 1px solid {COLORS['separator']};
-                border-radius: 10px;
-                padding: 8px 16px;
-                font-size: {FONT_NORMAL}px;
-            }}
-            QPushButton:hover {{ background-color: {COLORS['hover_bg']}; }}
-            QPushButton:checked {{
-                background-color: {COLORS['accent']};
-                color: white;
-                border-color: {COLORS['accent']};
-            }}
-        """)
+        self.btn_scroll.setStyleSheet(toggle_style())
         self.btn_scroll.clicked.connect(self._toggle_scroll)
         toolbar.addWidget(self.btn_scroll)
 

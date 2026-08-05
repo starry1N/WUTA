@@ -9,10 +9,11 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
+from wuta_gui.core import modes, workspace
 from wuta_gui.ui.theme import (
     COLORS, FONT_DISPLAY, FONT_LARGE, FONT_SMALL, FONT_NORMAL,
     font, groupbox_style, radio_check_style, button_style,
-    combo_style, scroll_style, messagebox_style
+    combo_style, scroll_style
 )
 
 
@@ -24,24 +25,12 @@ class LaunchPage(QWidget):
     stop_requested = pyqtSignal()       # 停止仿真请求
     manual_start_requested = pyqtSignal()  # 手动发车请求
 
-    # 任务模式常量
-    MODE_TRACKDRIVE = 0
-    MODE_SKIDPAD = 1
-    MODE_ACCELERATION = 2
-
-    # 模式名称（英文）
-    MODE_NAMES = {
-        MODE_TRACKDRIVE: "Trackdrive",
-        MODE_SKIDPAD: "Skidpad",
-        MODE_ACCELERATION: "Acceleration",
-    }
-
-    # 模式对应的赛道文件前缀
-    MODE_TRACK_PREFIX = {
-        MODE_TRACKDRIVE: "trackdrive",
-        MODE_SKIDPAD: "skidpad",
-        MODE_ACCELERATION: "acceleration",
-    }
+    # 任务模式常量（集中定义于 core/modes.py）
+    MODE_TRACKDRIVE = modes.MODE_TRACKDRIVE
+    MODE_SKIDPAD = modes.MODE_SKIDPAD
+    MODE_ACCELERATION = modes.MODE_ACCELERATION
+    MODE_NAMES = modes.MODE_NAMES
+    MODE_TRACK_PREFIX = modes.MODE_TRACK_PREFIX
 
     def __init__(self, wuta_root: str = None, parent=None):
         super().__init__(parent)
@@ -244,7 +233,7 @@ class LaunchPage(QWidget):
             self.track_combo.addItem("默认赛道", "default")
             return
 
-        tracks_dir = self.wuta_root / "WUTA-SIM/perception_simulation/tracks"
+        tracks_dir = workspace.tracks_dir(self.wuta_root)
 
         if not tracks_dir.exists():
             self.track_combo.addItem("默认赛道", "default")
@@ -404,17 +393,13 @@ class LaunchPage(QWidget):
         }
 
         # 检查是否需要先构建
-        if self.wuta_root:
-            fsd_install = self.wuta_root / "WUTA-FSD/ros2_ws/install/setup.bash"
-            sim_install = self.wuta_root / "WUTA-SIM/install/setup.bash"
-
-            if not fsd_install.exists() or not sim_install.exists():
-                QMessageBox.warning(
-                    self,
-                    "未构建",
-                    "检测到项目尚未构建，请先完成构建再启动仿真。"
-                )
-                return
+        if self.wuta_root and not workspace.is_built(self.wuta_root):
+            QMessageBox.warning(
+                self,
+                "未构建",
+                "检测到项目尚未构建，请先完成构建再启动仿真。"
+            )
+            return
 
         # 发射信号
         self.launch_requested.emit(params)

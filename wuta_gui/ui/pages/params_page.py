@@ -1,13 +1,15 @@
 """参数调节页面 - 分类展示所有可调参数，保存后启动时生效"""
 
+import re
 from pathlib import Path
 from typing import Dict, Any, Optional
 
+import yaml
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QComboBox, QCheckBox,
     QScrollArea, QFrame, QGroupBox, QDoubleSpinBox,
-    QSpinBox, QPushButton, QFileDialog, QMessageBox
+    QSpinBox, QPushButton, QFileDialog, QMessageBox, QInputDialog
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 
@@ -799,8 +801,6 @@ class ParamsPage(QWidget):
 
     def _save_params(self):
         """保存参数到 YAML 文件（弹出文件名输入框）"""
-        from PyQt5.QtWidgets import QInputDialog
-
         # 获取保存文件名
         name, ok = QInputDialog.getText(
             self,
@@ -814,14 +814,11 @@ class ParamsPage(QWidget):
         # 清理文件名
         name = name.strip()
         # 移除不合法的文件名字符
-        import re
         name = re.sub(r'[^\w\-]', '_', name)
 
         if not name:
             self.feedback.emit("error", "配置名称无效")
             return
-
-        import yaml
 
         params = self.get_all_params()
         if not params:
@@ -838,7 +835,7 @@ class ParamsPage(QWidget):
         save_data = {
             'metadata': {
                 'description': f'WUTA 参数配置文件 - {name}',
-                'format': '按节点分组，启动时通过 ros2 param load 应用到对应节点',
+                'format': '按节点分组，启动时由 start_simulator.sh 在 launch 阶段注入生效',
             },
             'parameters': node_params,
         }
@@ -869,8 +866,6 @@ class ParamsPage(QWidget):
 
     def _load_preset(self):
         """从 YAML 加载参数预设"""
-        import yaml
-
         path, _ = QFileDialog.getOpenFileName(
             self, "加载预设", str(self._get_params_dir()), "YAML (*.yaml *.yml)"
         )

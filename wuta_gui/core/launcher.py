@@ -1,15 +1,19 @@
 """仿真启动模块 - 复用 start_simulator.sh，支持参数配置加载"""
 
+import json
 import os
 import signal
 import subprocess
-import json
+import threading
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any
 
 from PyQt5.QtCore import QObject
 from PyQt5.QtCore import pyqtSignal
+
+from wuta_gui.core import modes, workspace
 
 
 class Launcher(QObject):
@@ -34,25 +38,7 @@ class Launcher(QObject):
         self.state_file = self.wuta_root / self.STATE_FILE
         self.process: Optional[subprocess.Popen] = None
         self.log_file: Optional[str] = None
-    
-    def _find_start_script(self) -> Path:
-        """查找 start_simulator.sh 脚本"""
-        # 首先检查 wuta_root 下是否有
-        script = self.wuta_root / "start_simulator.sh"
-        if script.exists():
-            return script
-        
-        # 向上查找（最多3层）
-        current = self.wuta_root
-        for _ in range(3):
-            current = current.parent
-            script = current / "start_simulator.sh"
-            if script.exists():
-                return script
-        
-        # 如果都找不到，返回默认路径
-        return self.wuta_root / "start_simulator.sh"
-    
+
     def launch(self, params: Dict[str, Any]) -> bool:
         """
         启动仿真
@@ -100,7 +86,6 @@ class Launcher(QObject):
             self._save_state(state)
 
             # 启动日志读取线程
-            import threading
             self.log_thread = threading.Thread(target=self._read_logs, daemon=True)
             self.log_thread.start()
 
@@ -121,7 +106,7 @@ class Launcher(QObject):
     
     def _build_command(self, params: Dict[str, Any]) -> list:
         """构建启动命令"""
-        start_script = self._find_start_script()
+        start_script = workspace.find_start_script(self.wuta_root)
         cmd = ["bash", str(start_script)]
 
         # 跳过构建（启动页面已确保构建完成）
@@ -142,20 +127,16 @@ class Launcher(QObject):
         """将参数字典转换为 launch 参数列表"""
         args = []
 
-        # 任务模式映射（整数 -> 字符串）
-        MODE_MAP = {0: "trackdrive", 1: "skidpad", 2: "acceleration"}
-
         # 基础参数
         if 'mission_mode' in params:
             mode = params['mission_mode']
-            mode_name = MODE_MAP.get(mode, "trackdrive") if isinstance(mode, int) else mode
+            mode_name = modes.MODE_LAUNCH.get(mode, "trackdrive") if isinstance(mode, int) else mode
             args.append(f"mission_mode:={mode_name}")
         
         if 'track_file' in params:
             track_val = params['track_file']
             if track_val and track_val != "default":
                 # 提取文件名（不含路径和扩展名）
-                from pathlib import Path
                 track_val = Path(track_val).stem
             args.append(f"track_file:={track_val}")
         
@@ -236,7 +217,6 @@ class Launcher(QObject):
                 os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
                 
                 # 等待 2 秒
-                import time
                 time.sleep(2)
                 
                 # 如果还在运行，强制终止

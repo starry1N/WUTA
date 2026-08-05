@@ -289,107 +289,19 @@ if [[ "${BUILD_ONLY}" -eq 1 ]]; then
   exit 0
 fi
 
+# 通过环境变量把用户参数文件注入 launch：节点启动时即带参数，
+# 无需启动后再逐个 ros2 param load（启动即生效，且不依赖 DDS 发现）。
+if [[ -n "${PARAMS_FILE}" ]] && [[ -f "${PARAMS_FILE}" ]]; then
+  export WUTA_PARAMS_FILE="${PARAMS_FILE}"
+  echo "Injecting user parameters from ${PARAMS_FILE} at launch time"
+fi
+
 echo "Starting simulator_bringup..."
 cd "${ROOT_DIR}"
 
-# Launch simulator in background so we can load parameters after nodes start
+# Launch simulator in background
 ros2 launch simulator_bringup simulator.launch.py "${LAUNCH_ARGS[@]}" &
 LAUNCH_PID=$!
-
-# Load node parameters if specified
-if [[ -n "${PARAMS_FILE}" ]] && [[ -f "${PARAMS_FILE}" ]]; then
-  echo "Loading node parameters from ${PARAMS_FILE}..."
-
-  # Parse the params file and apply to each node
-  # Expected format:
-  #   parameters:
-  #     node_name:
-  #       param_name: value
-  #
-  # ros2 param load expects:
-  #   node_name:
-  #     ros__parameters:
-  #       param_name: value
-  python3 -c '
-import yaml
-import subprocess
-import sys
-import tempfile
-import os
-import time
-
-params_file = sys.argv[1]
-with open(params_file, encoding="utf-8") as f:
-    config = yaml.safe_load(f)
-
-if not config or "parameters" not in config:
-    print("Invalid params file: missing parameters section", file=sys.stderr)
-    sys.exit(0)
-
-node_params = config["parameters"]
-
-def wait_for_node(node_name, timeout=30):
-    """Wait until the node appears in ros2 node list"""
-    start = time.time()
-    while time.time() - start < timeout:
-        try:
-            result = subprocess.run(
-                ["ros2", "node", "list"],
-                capture_output=True, text=True, timeout=5
-            )
-            if result.returncode == 0 and node_name in result.stdout:
-                return True
-        except Exception:
-            pass
-        time.sleep(0.5)
-    return False
-
-applied = 0
-failed_nodes = []
-for node_name, params in node_params.items():
-    if not isinstance(params, dict):
-        continue
-
-    # Wait for the node to be available
-    print(f"  Waiting for {node_name}...")
-    if not wait_for_node(node_name, timeout=30):
-        print(f"  Timeout waiting for {node_name}, skipping", file=sys.stderr)
-        failed_nodes.append(node_name)
-        continue
-
-    # Build ros2 param load compatible format
-    ros2_params = {node_name: {"ros__parameters": params}}
-
-    # Write to temp file
-    tmp_fd, tmp_path = tempfile.mkstemp(
-        prefix=f"wuta_params_{node_name}_", suffix=".yaml"
-    )
-    try:
-        with os.fdopen(tmp_fd, "w") as tmp_f:
-            yaml.dump(ros2_params, tmp_f, default_flow_style=False)
-
-        result = subprocess.run(
-            ["ros2", "param", "load", node_name, tmp_path],
-            capture_output=True, text=True, timeout=10
-        )
-        if result.returncode == 0:
-            print(f"  Loaded {len(params)} params for {node_name}")
-            applied += 1
-        else:
-            err = result.stderr.strip() if result.stderr else "unknown error"
-            print(f"  Failed to load {node_name}: {err}", file=sys.stderr)
-            failed_nodes.append(node_name)
-    finally:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-
-print(f"Parameters applied to {applied} node(s)")
-if failed_nodes:
-    print(f"Failed nodes: {', '.join(failed_nodes)}", file=sys.stderr)
-' "${PARAMS_FILE}" || true
-fi
 
 # Wait for the launch process to finish
 wait $LAUNCH_PID
