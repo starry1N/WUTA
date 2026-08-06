@@ -38,59 +38,159 @@ class ParamsPage(QWidget):
 
     # 参数定义 (排除启动页面已有的参数)
     PARAM_DEFS: Dict[str, Dict[str, Any]] = {
-        # === 速度控制 ===
+        # === Skidpad ===
+        'skidpad_velocity': {
+            'type': 'float', 'default': 5.0, 'range': (1.0, 15.0),
+            'unit': 'm/s', 'category': 'Skidpad',
+            'desc': '绕桩速度',
+            'node': 'path_generator_node'
+        },
+        'skidpad_points': {
+            'type': 'int', 'default': 72, 'range': (16, 144),
+            'unit': '', 'category': 'Skidpad',
+            'desc': '绕桩每圈点数',
+            'node': 'path_generator_node'
+        },
+        'skidpad_exit_length': {
+            'type': 'float', 'default': 25.0, 'range': (10.0, 50.0),
+            'unit': 'm', 'category': 'Skidpad',
+            'desc': '绕桩出口长度',
+            'node': 'path_generator_node'
+        },
+        'skidpad_braking_distance': {
+            'type': 'float', 'default': 10.0, 'range': (2.0, 30.0),
+            'unit': 'm', 'category': 'Skidpad',
+            'desc': '绕桩制动距离',
+            'node': 'path_generator_node'
+        },
+
+        # === Acceleration ===
+        'acceleration_velocity': {
+            'type': 'float', 'default': 15.0, 'range': (5.0, 30.0),
+            'unit': 'm/s', 'category': 'Acceleration',
+            'desc': '直线加速速度',
+            'node': 'path_generator_node'
+        },
+        'acceleration_length': {
+            'type': 'float', 'default': 75.0, 'range': (20.0, 200.0),
+            'unit': 'm', 'category': 'Acceleration',
+            'desc': '计时距离',
+            'node': 'path_generator_node'
+        },
+        'acceleration_stopping_distance': {
+            'type': 'float', 'default': 100.0, 'range': (20.0, 300.0),
+            'unit': 'm', 'category': 'Acceleration',
+            'desc': '计时后停车距离',
+            'node': 'path_generator_node'
+        },
+
+        # === Trackdrive（速度 + 路径几何） ===
         'trackdrive_velocity': {
             'type': 'float', 'default': 7.0, 'range': (1.0, 20.0),
-            'unit': 'm/s', 'category': '速度控制',
+            'unit': 'm/s', 'category': 'Trackdrive',
             'desc': '第1圈（建图圈）速度上限',
             'node': 'path_generator_node'
         },
         'trackdrive_min_velocity': {
             'type': 'float', 'default': 3.0, 'range': (0.5, 10.0),
-            'unit': 'm/s', 'category': '速度控制',
+            'unit': 'm/s', 'category': 'Trackdrive',
             'desc': '第1圈最低速度（速度过渡下限）',
             'node': 'path_generator_node'
         },
         'trackdrive_lateral_accel_limit': {
             'type': 'float', 'default': 4.0, 'range': (0.5, 15.0),
-            'unit': 'm/s²', 'category': '速度控制',
+            'unit': 'm/s²', 'category': 'Trackdrive',
             'desc': '第1圈横向加速度限制（曲率限速）',
             'node': 'path_generator_node'
         },
         'trackdrive_race_lap2_velocity': {
             'type': 'float', 'default': 9.0, 'range': (1.0, 25.0),
-            'unit': 'm/s', 'category': '速度控制',
+            'unit': 'm/s', 'category': 'Trackdrive',
             'desc': '比赛圈速度上限（第2圈，lap_count≤1）',
             'node': 'path_generator_node'
         },
         'trackdrive_race_velocity': {
             'type': 'float', 'default': 10.0, 'range': (1.0, 25.0),
-            'unit': 'm/s', 'category': '速度控制',
+            'unit': 'm/s', 'category': 'Trackdrive',
             'desc': '比赛圈速度上限（第3圈，lap_count>1）',
             'node': 'path_generator_node'
         },
         'trackdrive_race_min_velocity': {
             'type': 'float', 'default': 4.0, 'range': (0.5, 10.0),
-            'unit': 'm/s', 'category': '速度控制',
+            'unit': 'm/s', 'category': 'Trackdrive',
             'desc': '比赛圈最低速度（速度过渡下限）',
             'node': 'path_generator_node'
         },
         'trackdrive_race_lateral_accel_limit': {
             'type': 'float', 'default': 6.0, 'range': (0.5, 15.0),
-            'unit': 'm/s²', 'category': '速度控制',
+            'unit': 'm/s²', 'category': 'Trackdrive',
             'desc': '比赛圈横向加速度限制（曲率限速）',
             'node': 'path_generator_node'
         },
         'trackdrive_short_centerline_velocity': {
             'type': 'float', 'default': 3.0, 'range': (0.5, 10.0),
-            'unit': 'm/s', 'category': '速度控制',
+            'unit': 'm/s', 'category': 'Trackdrive',
             'desc': '短中心线限速（点数过少时触发）',
             'node': 'path_generator_node'
         },
         'trackdrive_low_confidence_velocity': {
             'type': 'float', 'default': 3.0, 'range': (0.5, 10.0),
-            'unit': 'm/s', 'category': '速度控制',
+            'unit': 'm/s', 'category': 'Trackdrive',
             'desc': '置信度为0时的速度下限',
+            'node': 'path_generator_node'
+        },
+        'trackdrive_confidence_slow_threshold': {
+            'type': 'float', 'default': 0.45, 'range': (0.0, 1.0),
+            'unit': '', 'category': 'Trackdrive',
+            'desc': '置信度下限（低于此值速度=low_confidence_velocity）',
+            'node': 'path_generator_node'
+        },
+        'trackdrive_confidence_full_threshold': {
+            'type': 'float', 'default': 0.75, 'range': (0.0, 1.0),
+            'unit': '', 'category': 'Trackdrive',
+            'desc': '置信度上限（高于此值速度=max_velocity）',
+            'node': 'path_generator_node'
+        },
+        'trackdrive_global_horizon_distance': {
+            'type': 'float', 'default': 40.0, 'range': (10.0, 100.0),
+            'unit': 'm', 'category': 'Trackdrive',
+            'desc': '全局路径发布的前视距离',
+            'node': 'path_generator_node'
+        },
+        'trackdrive_global_search_points': {
+            'type': 'int', 'default': 24, 'range': (3, 100),
+            'unit': '', 'category': 'Trackdrive',
+            'desc': '全局路径搜索点数（从近到远搜索）',
+            'node': 'path_generator_node'
+        },
+        'trackdrive_global_min_points': {
+            'type': 'int', 'default': 20, 'range': (5, 100),
+            'unit': '', 'category': 'Trackdrive',
+            'desc': '识别为全局环线的最小点数阈值',
+            'node': 'path_generator_node'
+        },
+        'trackdrive_min_forward_target': {
+            'type': 'float', 'default': 0.5, 'range': (0.1, 5.0),
+            'unit': 'm', 'category': 'Trackdrive',
+            'desc': '最小前向目标距离（过滤反向路径）',
+            'node': 'path_generator_node'
+        },
+        'trackdrive_resample_spacing': {
+            'type': 'float', 'default': 1.0, 'range': (0.2, 5.0),
+            'unit': 'm', 'category': 'Trackdrive',
+            'desc': '路径重采样间距（均匀化路径点）',
+            'node': 'path_generator_node'
+        },
+        'trackdrive_full_speed_forward_distance': {
+            'type': 'float', 'default': 15.0, 'range': (5.0, 50.0),
+            'unit': 'm', 'category': 'Trackdrive',
+            'desc': '速度过渡距离（min→max速度线性过渡）',
+            'node': 'path_generator_node'
+        },
+        'trackdrive_global_publish_period_sec': {
+            'type': 'float', 'default': 0.10, 'range': (0.01, 1.0),
+            'unit': 's', 'category': 'Trackdrive',
+            'desc': '全局路径发布周期（10Hz）',
             'node': 'path_generator_node'
         },
 
@@ -101,109 +201,53 @@ class ParamsPage(QWidget):
             'desc': '边界检测局部前瞻距离（局部路径提取）',
             'node': 'boundary_detector_node'
         },
-        'trackdrive_global_horizon_distance': {
-            'type': 'float', 'default': 40.0, 'range': (10.0, 100.0),
-            'unit': 'm', 'category': '路径规划',
-            'desc': '全局路径发布的前视距离',
-            'node': 'path_generator_node'
-        },
-        'trackdrive_global_search_points': {
-            'type': 'int', 'default': 24, 'range': (3, 100),
-            'unit': '', 'category': '路径规划',
-            'desc': '全局路径搜索点数（从近到远搜索）',
-            'node': 'path_generator_node'
-        },
-        'trackdrive_global_min_points': {
-            'type': 'int', 'default': 20, 'range': (5, 100),
-            'unit': '', 'category': '路径规划',
-            'desc': '识别为全局环线的最小点数阈值',
-            'node': 'path_generator_node'
-        },
-        'trackdrive_min_forward_target': {
-            'type': 'float', 'default': 0.5, 'range': (0.1, 5.0),
-            'unit': 'm', 'category': '路径规划',
-            'desc': '最小前向目标距离（过滤反向路径）',
-            'node': 'path_generator_node'
-        },
-        'trackdrive_resample_spacing': {
-            'type': 'float', 'default': 1.0, 'range': (0.2, 5.0),
-            'unit': 'm', 'category': '路径规划',
-            'desc': '路径重采样间距（均匀化路径点）',
-            'node': 'path_generator_node'
-        },
-        'trackdrive_full_speed_forward_distance': {
-            'type': 'float', 'default': 15.0, 'range': (5.0, 50.0),
-            'unit': 'm', 'category': '路径规划',
-            'desc': '速度过渡距离（min→max速度线性过渡）',
-            'node': 'path_generator_node'
-        },
-        'trackdrive_global_publish_period_sec': {
-            'type': 'float', 'default': 0.10, 'range': (0.01, 1.0),
-            'unit': 's', 'category': '路径规划',
-            'desc': '全局路径发布周期（10Hz）',
-            'node': 'path_generator_node'
-        },
-
-        # === 置信度阈值 ===
-        'trackdrive_confidence_slow_threshold': {
-            'type': 'float', 'default': 0.45, 'range': (0.0, 1.0),
-            'unit': '', 'category': '置信度阈值',
-            'desc': '置信度下限（低于此值速度=low_confidence_velocity）',
-            'node': 'path_generator_node'
-        },
-        'trackdrive_confidence_full_threshold': {
-            'type': 'float', 'default': 0.75, 'range': (0.0, 1.0),
-            'unit': '', 'category': '置信度阈值',
-            'desc': '置信度上限（高于此值速度=max_velocity）',
-            'node': 'path_generator_node'
-        },
         'global_min_coverage_ratio': {
             'type': 'float', 'default': 0.6, 'range': (0.1, 1.0),
-            'unit': '', 'category': '置信度阈值',
+            'unit': '', 'category': '路径规划',
             'desc': '全局路径最小覆盖率（低于此值不使用全局路径）',
             'node': 'boundary_detector_node'
         },
 
-        # === 建图参数 ===
+        # === 建图与闭环 ===
         'merge_distance': {
             'type': 'float', 'default': 0.5, 'range': (0.1, 2.0),
-            'unit': 'm', 'category': '建图参数',
+            'unit': 'm', 'category': '建图与闭环',
             'desc': '同一锥桶合并距离',
             'node': 'cone_map_builder'
         },
         'min_hit_count': {
             'type': 'int', 'default': 2, 'range': (1, 10),
-            'unit': '次', 'category': '建图参数',
+            'unit': '次', 'category': '建图与闭环',
             'desc': '锥桶发布前最低检测次数',
             'node': 'cone_map_builder'
         },
         'loop_closure_distance': {
             'type': 'float', 'default': 3.0, 'range': (1.0, 10.0),
-            'unit': 'm', 'category': '建图参数',
+            'unit': 'm', 'category': '建图与闭环',
             'desc': '闭环检测距离阈值',
             'node': 'cone_map_builder'
         },
         'min_cones_for_closure': {
             'type': 'int', 'default': 10, 'range': (5, 50),
-            'unit': '个', 'category': '建图参数',
+            'unit': '个', 'category': '建图与闭环',
             'desc': '闭环检测最少锥桶数',
             'node': 'cone_map_builder'
         },
         'start_skip_distance': {
             'type': 'float', 'default': 30.0, 'range': (5.0, 100.0),
-            'unit': 'm', 'category': '建图参数',
+            'unit': 'm', 'category': '建图与闭环',
             'desc': '起始跳过距离（防止起点误触发闭环）',
             'node': 'cone_map_builder'
         },
         'loop_closure_heading_tolerance_deg': {
             'type': 'float', 'default': 60.0, 'range': (5.0, 180.0),
-            'unit': '°', 'category': '建图参数',
+            'unit': '°', 'category': '建图与闭环',
             'desc': '闭环检测航向容差',
             'node': 'cone_map_builder'
         },
         'assign_colors': {
             'type': 'bool', 'default': True,
-            'category': '建图参数',
+            'category': '建图与闭环',
             'desc': '按 LiDAR 左右分色（UNKNOWN 锥桶）',
             'node': 'cone_map_builder'
         },
@@ -279,136 +323,134 @@ class ParamsPage(QWidget):
             'node': 'simulated_cone_colorizer'
         },
 
-        # === 车辆参数 ===
+        # === 车辆控制（车辆模型 + 纯追踪） ===
         'lf': {
             'type': 'float', 'default': 0.8, 'range': (0.1, 2.0),
-            'unit': 'm', 'category': '车辆参数',
+            'unit': 'm', 'category': '车辆控制',
             'desc': '质心到前轴距离',
             'node': 'controller_node'
         },
         'max_steering_rate_deg_s': {
             'type': 'float', 'default': 180.0, 'range': (30.0, 360.0),
-            'unit': '°/s', 'category': '车辆参数',
+            'unit': '°/s', 'category': '车辆控制',
             'desc': '最大转向角速率',
             'node': 'controller_node'
         },
         'finish_position_tolerance': {
             'type': 'float', 'default': 0.75, 'range': (0.1, 3.0),
-            'unit': 'm', 'category': '车辆参数',
+            'unit': 'm', 'category': '车辆控制',
             'desc': '终点位置容差',
             'node': 'controller_node'
         },
         'finish_speed_threshold': {
             'type': 'float', 'default': 0.2, 'range': (0.05, 1.0),
-            'unit': 'm/s', 'category': '车辆参数',
+            'unit': 'm/s', 'category': '车辆控制',
             'desc': '终点速度阈值',
             'node': 'controller_node'
         },
 
-        # === 纯追踪控制 ===
         'ld_ratio': {
             'type': 'float', 'default': 2.0, 'range': (0.5, 5.0),
-            'unit': '', 'category': '纯追踪控制',
+            'unit': '', 'category': '车辆控制',
             'desc': '前瞻距离比率 (lookahead = velocity × ratio)',
             'node': 'controller_node'
         },
         'min_lookahead': {
             'type': 'float', 'default': 2.0, 'range': (0.5, 10.0),
-            'unit': 'm', 'category': '纯追踪控制',
+            'unit': 'm', 'category': '车辆控制',
             'desc': '最小前瞻距离',
             'node': 'controller_node'
         },
         'max_lookahead': {
             'type': 'float', 'default': 20.0, 'range': (5.0, 50.0),
-            'unit': 'm', 'category': '纯追踪控制',
+            'unit': 'm', 'category': '车辆控制',
             'desc': '最大前瞻距离',
             'node': 'controller_node'
         },
         'max_progress_advance': {
             'type': 'int', 'default': 4, 'range': (1, 20),
-            'unit': '', 'category': '纯追踪控制',
+            'unit': '', 'category': '车辆控制',
             'desc': '每次控制更新最大前进路点数',
             'node': 'controller_node'
         },
         'skidpad_lookahead': {
             'type': 'float', 'default': 3.0, 'range': (1.0, 10.0),
-            'unit': 'm', 'category': '纯追踪控制',
+            'unit': 'm', 'category': '车辆控制',
             'desc': '绕桩固定前瞻距离',
             'node': 'controller_node'
         },
         'trackdrive_lookahead': {
             'type': 'float', 'default': 5.0, 'range': (1.0, 20.0),
-            'unit': 'm', 'category': '纯追踪控制',
+            'unit': 'm', 'category': '车辆控制',
             'desc': '赛道固定前瞻距离',
             'node': 'controller_node'
         },
         'trackdrive_target_loss_hold_time': {
             'type': 'float', 'default': 0.5, 'range': (0.1, 2.0),
-            'unit': 's', 'category': '纯追踪控制',
+            'unit': 's', 'category': '车辆控制',
             'desc': '目标丢失保持时间',
             'node': 'controller_node'
         },
         'trackdrive_target_loss_hold_speed': {
             'type': 'float', 'default': 2.0, 'range': (0.5, 5.0),
-            'unit': 'm/s', 'category': '纯追踪控制',
+            'unit': 'm/s', 'category': '车辆控制',
             'desc': '目标丢失保持速度',
             'node': 'controller_node'
         },
 
-        # === 全局配对 ===
+        # === 边界配对（全局 + 局部） ===
         'global_pairing_min_width': {
             'type': 'float', 'default': 1.5, 'range': (0.5, 5.0),
-            'unit': 'm', 'category': '全局配对',
+            'unit': 'm', 'category': '边界配对',
             'desc': '全局配对最小宽度',
             'node': 'boundary_detector_node'
         },
         'global_pairing_max_width': {
             'type': 'float', 'default': 7.5, 'range': (2.0, 15.0),
-            'unit': 'm', 'category': '全局配对',
+            'unit': 'm', 'category': '边界配对',
             'desc': '全局配对最大宽度',
             'node': 'boundary_detector_node'
         },
         'global_pairing_dedup_distance': {
             'type': 'float', 'default': 0.75, 'range': (0.1, 3.0),
-            'unit': 'm', 'category': '全局配对',
+            'unit': 'm', 'category': '边界配对',
             'desc': '全局配对去重距离',
             'node': 'boundary_detector_node'
         },
         'global_max_segment_length': {
             'type': 'float', 'default': 10.0, 'range': (2.0, 30.0),
-            'unit': 'm', 'category': '全局配对',
+            'unit': 'm', 'category': '边界配对',
             'desc': '全局最大段长度',
             'node': 'boundary_detector_node'
         },
         'global_max_closure_distance': {
             'type': 'float', 'default': 8.0, 'range': (1.0, 20.0),
-            'unit': 'm', 'category': '全局配对',
+            'unit': 'm', 'category': '边界配对',
             'desc': '全局最大闭环距离',
             'node': 'boundary_detector_node'
         },
         'global_min_waypoints': {
             'type': 'int', 'default': 20, 'range': (5, 100),
-            'unit': '', 'category': '全局配对',
+            'unit': '', 'category': '边界配对',
             'desc': '全局最小路点数',
             'node': 'boundary_detector_node'
         },
 
-        # === 局部配对 ===
         'local_pairing_min_streak': {
             'type': 'int', 'default': 3, 'range': (1, 20),
-            'unit': '次', 'category': '局部配对',
+            'unit': '次', 'category': '边界配对',
             'desc': '几何配对回退前最小连续失败次数',
             'node': 'boundary_detector_node'
         },
         'local_pairing_color_imbalance_ratio': {
             'type': 'float', 'default': 0.20, 'range': (0.0, 1.0),
-            'unit': '', 'category': '局部配对',
+            'unit': '', 'category': '边界配对',
             'desc': '颜色不平衡比率（低于此值触发局部配对）',
             'node': 'boundary_detector_node'
         },
         'delaunay_min_waypoints': {
             'type': 'int', 'default': 3, 'range': (3, 20),
-            'unit': '', 'category': '局部配对',
+            'unit': '', 'category': '边界配对',
             'desc': 'Delaunay 最小路点数',
             'node': 'boundary_detector_node'
         },
@@ -485,52 +527,6 @@ class ParamsPage(QWidget):
             'category': '任务管理',
             'desc': '比赛时使用 NDT 定位',
             'node': 'mission_manager_node'
-        },
-
-        # === Skidpad ===
-        'skidpad_velocity': {
-            'type': 'float', 'default': 5.0, 'range': (1.0, 15.0),
-            'unit': 'm/s', 'category': 'Skidpad',
-            'desc': '绕桩速度',
-            'node': 'path_generator_node'
-        },
-        'skidpad_points': {
-            'type': 'int', 'default': 72, 'range': (16, 144),
-            'unit': '', 'category': 'Skidpad',
-            'desc': '绕桩每圈点数',
-            'node': 'path_generator_node'
-        },
-        'skidpad_exit_length': {
-            'type': 'float', 'default': 25.0, 'range': (10.0, 50.0),
-            'unit': 'm', 'category': 'Skidpad',
-            'desc': '绕桩出口长度',
-            'node': 'path_generator_node'
-        },
-        'skidpad_braking_distance': {
-            'type': 'float', 'default': 10.0, 'range': (2.0, 30.0),
-            'unit': 'm', 'category': 'Skidpad',
-            'desc': '绕桩制动距离',
-            'node': 'path_generator_node'
-        },
-
-        # === 直线加速 ===
-        'acceleration_velocity': {
-            'type': 'float', 'default': 15.0, 'range': (5.0, 30.0),
-            'unit': 'm/s', 'category': '直线加速',
-            'desc': '直线加速速度',
-            'node': 'path_generator_node'
-        },
-        'acceleration_length': {
-            'type': 'float', 'default': 75.0, 'range': (20.0, 200.0),
-            'unit': 'm', 'category': '直线加速',
-            'desc': '计时距离',
-            'node': 'path_generator_node'
-        },
-        'acceleration_stopping_distance': {
-            'type': 'float', 'default': 100.0, 'range': (20.0, 300.0),
-            'unit': 'm', 'category': '直线加速',
-            'desc': '计时后停车距离',
-            'node': 'path_generator_node'
         },
     }
 

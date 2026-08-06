@@ -1,6 +1,10 @@
 """共享主题配置 - Apple 风格配色、字体、通用样式"""
 
-from PyQt5.QtGui import QFont, QColor
+import tempfile
+from pathlib import Path
+
+from PyQt5.QtCore import Qt, QPointF
+from PyQt5.QtGui import QFont, QColor, QPixmap, QPainter, QPen, QPolygonF
 from PyQt5.QtWidgets import QGraphicsDropShadowEffect
 
 # === Apple 风格配色 ===
@@ -98,8 +102,51 @@ def groupbox_style() -> str:
     """
 
 
+# 缓存小勾图标路径（生成一次后复用，避免重复绘制）
+_CHECK_IMAGE_PATH: str = ''
+
+
+def checkmark_image_path() -> str:
+    """生成白色小勾 PNG（透明背景），供 QCheckBox 选中态显示小勾。
+
+    QSS 的 ::indicator 无法直接绘制矢量/文本小勾，只能通过 image 引入图片；
+    在首次构建页面（QApplication 已存在）时用 QPainter 生成一次并缓存。
+    生成失败时返回空串，调用方回退为纯色填充。
+    """
+    global _CHECK_IMAGE_PATH
+    if _CHECK_IMAGE_PATH:
+        return _CHECK_IMAGE_PATH
+    try:
+        size = 48  # 高分辨率绘制，由 Qt 缩放至 indicator 尺寸，保证边缘清晰
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        pen = QPen(QColor('#ffffff'))
+        pen.setWidthF(size * 0.15)
+        pen.setCapStyle(Qt.RoundCap)
+        pen.setJoinStyle(Qt.RoundJoin)
+        painter.setPen(pen)
+        painter.drawPolyline(QPolygonF([
+            QPointF(size * 0.22, size * 0.54),
+            QPointF(size * 0.43, size * 0.75),
+            QPointF(size * 0.79, size * 0.30),
+        ]))
+        painter.end()
+        cache_dir = Path(tempfile.gettempdir()) / 'wuta_gui'
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        path = cache_dir / 'check.png'
+        if pixmap.save(str(path)):
+            _CHECK_IMAGE_PATH = str(path)
+    except Exception:
+        _CHECK_IMAGE_PATH = ''  # 生成失败：保持纯色填充
+    return _CHECK_IMAGE_PATH
+
+
 def radio_check_style() -> str:
-    """单选/复选按钮样式 - Apple Toggle 风格"""
+    """单选/复选按钮样式 - Apple Toggle 风格（统一为方形底框，选中显示白色小勾）"""
+    check_img = checkmark_image_path()
+    checked_indicator = f"image: url({check_img});" if check_img else "image: none;"
     return f"""
         QRadioButton, QCheckBox {{
             color: {COLORS['text_primary']};
@@ -117,17 +164,10 @@ def radio_check_style() -> str:
             border-radius: 4px;
             background-color: {COLORS['bg_secondary']};
         }}
-        QRadioButton::indicator {{
-            border-radius: 9px;
-        }}
-        QRadioButton::indicator:checked {{
+        QRadioButton::indicator:checked, QCheckBox::indicator:checked {{
             border-color: {COLORS['accent']};
             background-color: {COLORS['accent']};
-        }}
-        QCheckBox::indicator:checked {{
-            border-color: {COLORS['accent']};
-            background-color: {COLORS['accent']};
-            image: none;
+            {checked_indicator}
         }}
     """
 

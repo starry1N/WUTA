@@ -374,9 +374,34 @@ RViz、车辆模型和初始位姿。脚本不依赖 `yq` 或 PyYAML，而是使
 
 ### 环境要求
 
-- Ubuntu 22.04 + ROS 2 Humble
-- Python 3.10+，额外依赖 `PyQt5`、`pyyaml`
+- Ubuntu 22.04 + ROS 2 Humble（完整功能需要，用于 ROS 话题订阅与仿真启动）
+- Python 3.10+
 - WUTA 项目已初始化子模块（`git submodule update --init --recursive`）
+- 已完成一次构建（`./start_simulator.sh --build-only`），否则状态/计时订阅不可用
+
+### GUI 依赖安装
+
+面板运行必需两个 Python 库：`PyQt5`（界面）与 `PyYAML`（参数/配置）。推荐用 APT 安装（与系统 Python 一致，避免与 ROS 环境冲突）：
+
+```bash
+sudo apt update
+sudo apt install -y python3-pyqt5 python3-yaml
+```
+
+实时显示车辆状态与比赛计时还依赖 ROS 2 消息接口，随环境自动提供，无需额外安装：
+
+| 依赖 | 来源 | 用途 |
+| --- | --- | --- |
+| `rclpy`、`nav_msgs`、`std_msgs` | ROS 2 Humble `ros-humble-ros-base` | 订阅 `/system/*`、`/sim/*` 话题 |
+| `wuta_msgs` | `WUTA-FSD` 构建产物（`WUTA-FSD/ros2_ws/install`） | `MissionState` 等自定义消息 |
+
+中文界面推荐安装 CJK 字体，否则中文可能显示为方块/乱码：
+
+```bash
+sudo apt install -y fonts-noto-cjk    # 或 fonts-wqy-microhei
+```
+
+> 说明：GUI 使用系统 Python 即可，不需要 pip 安装；`__main__.py` 启动时会自动检查 `PyQt5`/`pyyaml` 是否缺失。
 
 ### 启动方式
 
@@ -397,7 +422,7 @@ python3 -m wuta_gui --wuta-root /path/to/WUTA
 ### 使用流程
 
 1. **构建页面**：选择构建模式（增量 / 清理重建 / 跳过），可选"轻量构建"限制并行编译数，点击"开始构建"。
-2. **调参页面**：按分类调整约 90 个节点参数，点击"保存参数"生成配置文件（保存在 `wuta_gui/params/`）。
+2. **调参页面**：按分类调整 78 个节点参数（Skidpad / Acceleration / Trackdrive / 路径规划 / 建图与闭环 / LiDAR 检测 / 模拟相机 / 车辆控制 / 边界配对 / 任务管理），点击"保存参数"生成配置文件（保存在 `wuta_gui/params/`）。
 3. **启动页面**：
    - 选择任务模式（Trackdrive / Skidpad / Acceleration）、赛道文件；
    - 在"参数配置"下拉框中选择刚保存的参数文件；
