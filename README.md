@@ -368,6 +368,123 @@ RViz、车辆模型和初始位姿。脚本不依赖 `yq` 或 PyYAML，而是使
 ./start_simulator.sh --config /path/to/simulator_defaults.yaml --rviz
 ```
 
+## 图形化启动（wuta_gui 控制面板）
+
+除命令行外，仓库内置基于 PyQt5 的图形化控制面板 `wuta_gui`，用于一键构建、调参、启动仿真，并实时查看车辆状态、比赛计时与运行日志。
+
+### 环境要求
+
+- Ubuntu 22.04 + ROS 2 Humble（完整功能需要，用于 ROS 话题订阅与仿真启动）
+- Python 3.10+
+- WUTA 项目已初始化子模块（`git submodule update --init --recursive`）
+- 已完成一次构建（`./start_simulator.sh --build-only`），否则状态/计时订阅不可用
+
+### GUI 依赖安装
+
+面板运行必需两个 Python 库：`PyQt5`（界面）与 `PyYAML`（参数/配置）。推荐用 APT 安装（与系统 Python 一致，避免与 ROS 环境冲突）：
+
+```bash
+sudo apt update
+sudo apt install -y python3-pyqt5 python3-yaml
+```
+
+实时显示车辆状态与比赛计时还依赖 ROS 2 消息接口，随环境自动提供，无需额外安装：
+
+| 依赖 | 来源 | 用途 |
+| --- | --- | --- |
+| `rclpy`、`nav_msgs`、`std_msgs` | ROS 2 Humble `ros-humble-ros-base` | 订阅 `/system/*`、`/sim/*` 话题 |
+| `wuta_msgs` | `WUTA-FSD` 构建产物（`WUTA-FSD/ros2_ws/install`） | `MissionState` 等自定义消息 |
+
+中文界面推荐安装 CJK 字体，否则中文可能显示为方块/乱码：
+
+```bash
+sudo apt install -y fonts-noto-cjk    # 或 fonts-wqy-microhei
+```
+
+> 说明：GUI 使用系统 Python 即可，不需要 pip 安装；`__main__.py` 启动时会自动检查 `PyQt5`/`pyyaml` 是否缺失。
+
+### 启动方式
+
+在 WUTA 仓库根目录执行：
+
+```bash
+python3 -m wuta_gui
+```
+
+也可手动指定项目根目录：
+
+```bash
+python3 -m wuta_gui --wuta-root /path/to/WUTA
+```
+
+> 说明：若当前终端未 source ROS 环境，面板会自动查找 `WUTA-FSD` / `WUTA-SIM` 的构建产物并重新加载环境后启动；完全不依赖 ROS 环境时也能打开（仅状态订阅不可用）。
+
+### 使用流程
+
+1. **构建页面**：选择构建模式（增量 / 清理重建 / 跳过），可选"轻量构建"限制并行编译数，点击"开始构建"。
+2. **调参页面**：按分类调整 78 个节点参数（Skidpad / Acceleration / Trackdrive / 路径规划 / 建图与闭环 / LiDAR 检测 / 模拟相机 / 车辆控制 / 边界配对 / 任务管理），点击"保存参数"生成配置文件（保存在 `wuta_gui/params/`）。
+3. **启动页面**：
+   - 选择任务模式（Trackdrive / Skidpad / Acceleration）、赛道文件；
+   - 在"参数配置"下拉框中选择刚保存的参数文件；
+   - 勾选"启动 RViz 可视化"与"自动发车"后点击"启动仿真"。
+4. **顶栏 / 计时面板**：实时显示车速、位姿、航向、延迟，以及圈时 / 绕桩 / 直线加速计时。
+5. **日志页面**：实时查看仿真输出，可导出或打开日志目录（`logs/`）。
+
+### 参数生效机制
+
+参数文件格式（`wuta_gui/params/*.yaml`）：
+
+```yaml
+metadata:
+  description: WUTA 参数配置文件 - my_config
+  format: 按节点分组，启动时由 start_simulator.sh 在 launch 阶段注入生效
+parameters:
+  path_generator_node:
+    trackdrive_velocity: 3.0
+  controller_node:
+    ld_ratio: 2.5
+```
+
+启动时，GUI 通过 `--params-file=...` 将所选文件传给 `start_simulator.sh`，脚本将其注入 `simulator_bringup` 的 launch 文件，节点**启动即带参数**，无需启动后再逐节点加载，也无需重启等待。
+
+### 与 FSD / SIM 的解耦
+
+GUI 与 FSD、SIM 之间只存在三类接口，可独立开发：
+
+| 接口 | 说明 |
+| --- | --- |
+| `start_simulator.sh` | 唯一的构建/启动入口（GUI 通过 `bash start_simulator.sh ...` 调用） |
+| ROS 话题 | `/system/*`（状态/计时/发车/急停）、`/sim/*`（真值），消息类型见 `docs/ROS_INTERFACE.md` |
+| 只读数据 | 只读 SIM 赛道文件（`WUTA-SIM/perception_simulation/tracks/`）用于选择；只读 FSD/SIM 构建产物用于构建状态提示 |
+
+所有跨仓库路径集中定义于 `wuta_gui/core/workspace.py`，调整布局时只需修改一处。GUI 自身不写入任何 FSD/SIM 文件。
+
+### 目录结构
+
+```
+wuta_gui/
+├── __main__.py            # 入口：环境检测、依赖检查、全局样式
+├── core/
+│   ├── modes.py           # 任务模式常量（共享）
+│   ├── workspace.py       # 跨仓库路径（共享）
+│   ├── launcher.py        # 仿真启动/停止/日志（复用 start_simulator.sh）
+│   ├── builder.py         # 构建线程
+│   └── system_subscriber.py  # ROS 话题订阅/发布（延迟导入，无 ROS 可运行）
+├── ui/
+│   ├── theme.py           # 全部颜色/字体/样式（唯一风格来源）
+│   ├── main_window.py     # 主窗口：顶栏 + 侧边栏 + 页面切换
+│   ├── status_bar.py      # 顶栏车辆状态
+│   ├── timing_panel.py    # 比赛计时面板
+│   └── pages/             # 构建 / 启动 / 调参 / 日志 页面
+└── params/                # 参数配置文件（default_params.yaml 入库，其余忽略）
+```
+
+### 常见问题
+
+- **未检测到 ROS 环境**：面板底栏显示 ⚠ 提示，功能受限；请先完成一次构建后重启面板。
+- **参数看起来没生效**：确认启动页"参数配置"选中的是保存后的文件（而非"默认配置"）；速度/控制器类参数请观察顶栏车速或 RViz 表现。
+- **调整样式**：所有颜色、字体、控件样式统一在 `ui/theme.py` 中维护。
+
 ## RViz2 可视化
 
 推荐直接用一键脚本启动完整闭环和 RViz2：

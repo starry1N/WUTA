@@ -10,7 +10,6 @@ from rclpy.node import Node
 from sensor_msgs.msg import PointCloud2
 from std_msgs.msg import Bool, Float32, Float64, String, UInt32
 from tf2_ros import TransformBroadcaster
-from visualization_msgs.msg import Marker, MarkerArray
 from wuta_msgs.msg import MissionState
 
 
@@ -79,9 +78,6 @@ class SimulationBridge(Node):
         )
         self.inspection_trigger_pub = self.create_publisher(
             Bool, "/system/inspection_trigger", 10
-        )
-        self.system_status_viz_pub = self.create_publisher(
-            MarkerArray, "/system/status_viz", 10
         )
         self.lap_time_pub = self.create_publisher(Float64, "/system/lap_time", 10)
         self.latency_pub = self.create_publisher(
@@ -304,8 +300,17 @@ class SimulationBridge(Node):
             return
 
         shared_timing_line = abs(start_x - finish_x) < 1e-9
+        is_skidpad = current.mission_mode == MissionState.MISSION_SKIDPAD
+
         if self.lap_started_at_s is None:
             if shared_timing_line:
+                # For skidpad: only arm on positive direction crossing to avoid
+                # false trigger in the middle of figure-8
+                if is_skidpad:
+                    if not self._crosses_x_line(
+                        previous, msg, start_x, half_width, positive_only=True
+                    ):
+                        return
                 self.lap_started_at_s = stamp_s
                 self.get_logger().info(
                     "Lap timer armed at shared x=%.3f m line" % start_x
@@ -317,7 +322,7 @@ class SimulationBridge(Node):
 
         if shared_timing_line and not self.shared_timing_line_armed:
             distance_from_line = abs(msg.pose.pose.position.x - finish_x)
-            if distance_from_line <= max(3.0, half_width * 2.0):
+            if distance_from_line <= max(5.0, half_width * 3.0):
                 return
             self.shared_timing_line_armed = True
             self.get_logger().info(
@@ -326,12 +331,16 @@ class SimulationBridge(Node):
             )
             return
 
+        # For skidpad: only count positive direction crossings (left to right)
+        # to avoid false trigger when vehicle crosses x=0 in the middle of figure-8
+        crossing_positive_only = True if is_skidpad else (not shared_timing_line)
+
         if not self._crosses_x_line(
             previous,
             msg,
             finish_x,
             half_width,
-            positive_only=not shared_timing_line,
+            positive_only=crossing_positive_only,
         ):
             return
 
@@ -419,96 +428,7 @@ class SimulationBridge(Node):
         inspection_trigger.data = False
         self.inspection_trigger_pub.publish(inspection_trigger)
 
-        self._publish_status_visualization()
 
-    def _publish_status_visualization(self) -> None:
-        """Publish simulator runtime state as an RViz text marker."""
-        mode_names = {
-            MissionState.MISSION_TRACKDRIVE: "TRACKDRIVE",
-            MissionState.MISSION_SKIDPAD: "SKIDPAD",
-            MissionState.MISSION_ACCELERATION: "ACCELERATION",
-        }
-        current = self.latest_mission_state
-        state_names = {
-            MissionState.IDLE: "IDLE",
-            MissionState.READY: "READY",
-            MissionState.INSPECTION: "INSPECTION",
-            MissionState.EXPLORE: "EXPLORE",
-            MissionState.MAPPING_DONE: "MAPPING_DONE",
-            MissionState.RACE: "RACE",
-            MissionState.FINISH: "FINISH",
-            MissionState.EMERGENCY: "EMERGENCY",
-        }
-        mission_state = state_names.get(
-            current.state if current is not None else MissionState.IDLE,
-            "UNKNOWN",
-        )
-        mode_name = mode_names.get(
-            current.mission_mode if current is not None else -1, "UNKNOWN"
-        )
-        completed = current is not None and current.state == MissionState.FINISH
-
-        marker = Marker()
-        marker.header.frame_id = self.map_frame
-        marker.header.stamp = self.get_clock().now().to_msg()
-        marker.ns = "simulator_status"
-        marker.id = 0
-        marker.type = Marker.TEXT_VIEW_FACING
-        marker.action = Marker.ADD
-        marker.pose.orientation.w = 1.0
-        marker.pose.position.z = 2.5
-        marker.scale.z = 0.45
-        marker.color.r = 0.2 if completed else 1.0
-        marker.color.g = 1.0
-        marker.color.b = 0.2
-        marker.color.a = 1.0
-
-        lines = [
-            "Mission: %s" % mode_name,
-            "State: %s" % mission_state,
-            "Complete: %s" % str(completed).lower(),
-            "Ready: %s" % (
-                "manual confirmed" if self.manual_ready_confirmed
-                else "click RViz map" if self.manual_ready_enabled
-                else "automatic"
-            ),
-        ]
-        if self.latest_lap_time_s is None:
-            lines.append("Lap time: waiting for start/finish")
-        else:
-            lines.append("Last lap: %.3f s" % self.latest_lap_time_s)
-        if current is not None and current.mission_mode == MissionState.MISSION_TRACKDRIVE:
-            lines.append(
-                "Trackdrive laps: localization %d/%d, truth %d"
-                % (
-                    self.formal_lap_count,
-                    self.trackdrive_finish_laps,
-                    self.completed_laps,
-                )
-            )
-        if self.latest_latency_s is None:
-            lines.append("LiDAR -> command: waiting")
-        else:
-            lines.append("LiDAR -> command: %.1f ms" % (self.latest_latency_s * 1000.0))
-        if self.latest_ground_truth is not None:
-            position = self.latest_ground_truth.pose.pose.position
-            velocity = self.latest_ground_truth.twist.twist.linear
-            speed = (velocity.x * velocity.x + velocity.y * velocity.y) ** 0.5
-            marker.pose.position.x = position.x + 1.0
-            marker.pose.position.y = position.y + 1.0
-            lines.extend(
-                [
-                    "GT speed: %.2f m/s" % speed,
-                    "GT pose: (%.2f, %.2f) m" % (position.x, position.y),
-                ]
-            )
-        else:
-            lines.append("GT: waiting")
-        marker.text = "\n".join(lines)
-
-        markers = MarkerArray()
-        markers.markers.append(marker)
-        self.system_status_viz_pub.publish(markers)
 
 
 def main(args: Optional[list] = None) -> None:

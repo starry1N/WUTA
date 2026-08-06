@@ -40,6 +40,19 @@
 **.tmp
 **.temp
 
+# GUI logs
+wuta_gui/logs/
+*.log
+logs/
+
+# wuta_gui params (keep only default_params.yaml)
+wuta_gui/params/*.yaml
+!wuta_gui/params/default_params.yaml
+
+# wuta_gui cache
+wuta_gui/__pycache__/
+.wuta_gui_state.json
+
 # ROS bags
 **.bag
 

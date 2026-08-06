@@ -37,7 +37,7 @@ Visualization Manager:
         Y: 0
         Z: 0
       Plane: XY
-      Plane Cell Count: 40
+      Plane Cell Count: 300
       Reference Frame: map
       Value: true
     - Class: rviz_default_plugins/TF
@@ -116,7 +116,7 @@ Visualization Manager:
               Scale: 1
               Value: false
             Value: false
-          Enabled: true
+          Enabled: false
           Keep: 100
           Name: Ground Truth
           Position Tolerance: 0.10000000149011612
@@ -238,18 +238,6 @@ Visualization Manager:
             History Policy: Keep Last
             Reliability Policy: Reliable
             Value: /planning/driven_trajectory_viz
-          Value: true
-        - Class: rviz_default_plugins/MarkerArray
-          Enabled: true
-          Name: System Status (Mission and Ground Truth)
-          Namespaces:
-            {}
-          Topic:
-            Depth: 5
-            Durability Policy: Volatile
-            History Policy: Keep Last
-            Reliability Policy: Reliable
-            Value: /system/status_viz
           Value: true
       Enabled: true
       Name: FSD Pipeline

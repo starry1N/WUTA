@@ -5,6 +5,13 @@ composes their launch files and starts the optional WUTA-FSD Level A pipeline
 after its simulated inputs are available.
 """
 
+import os
+
+try:
+    import yaml
+except ImportError:  # pragma: no cover
+    yaml = None
+
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
@@ -25,6 +32,39 @@ from launch_ros.substitutions import FindPackageShare
 
 def _delayed(period, *actions):
     return TimerAction(period=period, actions=list(actions))
+
+
+def _load_user_parameters():
+    """Read user node parameters injected by start_simulator.sh.
+
+    The file layout is the GUI params format:
+      parameters:
+        node_name:
+          param: value
+    """
+    params_file = os.environ.get("WUTA_PARAMS_FILE", "")
+    if not params_file or not os.path.isfile(params_file) or yaml is None:
+        return {}
+    try:
+        with open(params_file, encoding="utf-8") as stream:
+            config = yaml.safe_load(stream)
+    except Exception:
+        return {}
+    if not isinstance(config, dict):
+        return {}
+    node_params = config.get("parameters", {})
+    return node_params if isinstance(node_params, dict) else {}
+
+
+_USER_PARAMS = _load_user_parameters()
+
+
+def _with_user_parameters(parameters, node_name):
+    """Append the user parameters for node_name when present."""
+    user_params = _USER_PARAMS.get(node_name)
+    if isinstance(user_params, dict) and user_params:
+        parameters.append(user_params)
+    return parameters
 
 
 def generate_launch_description():
@@ -247,7 +287,7 @@ def generate_launch_description():
         package="lidar_detection",
         executable="lidar_detection_node",
         name="lidar_detection_node",
-        parameters=[
+        parameters=_with_user_parameters([
             PathJoinSubstitution(
                 [
                     FindPackageShare("lidar_detection"),
@@ -260,7 +300,7 @@ def generate_launch_description():
                     perception_output_topic, value_type=str
                 ),
             },
-        ],
+        ], "lidar_detection_node"),
         output="screen",
         condition=fsd_with_perception,
     )
@@ -268,13 +308,13 @@ def generate_launch_description():
         package="simulator_bringup",
         executable="simulated_cone_colorizer",
         name="simulated_cone_colorizer",
-        parameters=[
+        parameters=_with_user_parameters([
             {
                 "track_file": LaunchConfiguration("track_file"),
                 "input_topic": "/perception/lidar/cones_raw",
                 "output_topic": "/perception/lidar/cones",
             }
-        ],
+        ], "simulated_cone_colorizer"),
         output="screen",
         condition=fsd_with_simulated_colors,
     )
@@ -282,7 +322,7 @@ def generate_launch_description():
         package="cone_map_builder",
         executable="cone_map_builder_node",
         name="cone_map_builder",
-        parameters=[
+        parameters=_with_user_parameters([
             PathJoinSubstitution(
                 [
                     FindPackageShare("cone_map_builder"),
@@ -300,7 +340,7 @@ def generate_launch_description():
                     value_type=bool,
                 ),
             },
-        ],
+        ], "cone_map_builder"),
         output="screen",
         condition=fsd_with_perception,
     )
@@ -308,7 +348,7 @@ def generate_launch_description():
         package="boundary_detector",
         executable="boundary_detector_node",
         name="boundary_detector_node",
-        parameters=[
+        parameters=_with_user_parameters([
             PathJoinSubstitution(
                 [
                     FindPackageShare("boundary_detector"),
@@ -316,7 +356,7 @@ def generate_launch_description():
                     "boundary_detector.yaml",
                 ]
             )
-        ],
+        ], "boundary_detector_node"),
         output="screen",
         condition=launch_fsd,
     )
@@ -324,7 +364,7 @@ def generate_launch_description():
         package="path_generator",
         executable="path_generator_node",
         name="path_generator_node",
-        parameters=[
+        parameters=_with_user_parameters([
             PathJoinSubstitution(
                 [
                     FindPackageShare("path_generator"),
@@ -332,7 +372,7 @@ def generate_launch_description():
                     "path_generator.yaml",
                 ]
             )
-        ],
+        ], "path_generator_node"),
         output="screen",
         condition=launch_fsd,
     )
@@ -340,11 +380,11 @@ def generate_launch_description():
         package="controller",
         executable="controller_node",
         name="controller_node",
-        parameters=[
+        parameters=_with_user_parameters([
             PathJoinSubstitution(
                 [FindPackageShare("controller"), "controller.yaml"]
             )
-        ],
+        ], "controller_node"),
         output="screen",
         condition=launch_fsd,
     )
@@ -352,7 +392,7 @@ def generate_launch_description():
         package="mission_manager",
         executable="mission_manager_node",
         name="mission_manager_node",
-        parameters=[
+        parameters=_with_user_parameters([
             PathJoinSubstitution(
                 [
                     FindPackageShare("mission_manager"),
@@ -367,7 +407,7 @@ def generate_launch_description():
                     value_type=int,
                 ),
             },
-        ],
+        ], "mission_manager_node"),
         output="screen",
         condition=launch_fsd,
     )

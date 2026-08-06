@@ -11,8 +11,10 @@ DEFAULT_CONFIG_FILE="${ROOT_DIR}/config/simulator_defaults.yaml"
 CLEAN=0
 SKIP_BUILD=0
 BUILD_ONLY=0
+LIGHTWEIGHT=0
 LAUNCH_ARGS=()
 CONFIG_FILE="${DEFAULT_CONFIG_FILE}"
+PARAMS_FILE=""
 
 usage() {
   cat <<'EOF'
@@ -24,8 +26,10 @@ Options:
   --clean       Clean both workspaces before building.
   --skip-build  Skip all builds and use the existing install spaces.
   --build-only  Build both workspaces without starting ROS nodes.
+  --lightweight Limit parallel jobs (for systems with <=8GB RAM).
   --rviz        Start RViz2 with the default simulator visualization config.
   --config PATH Load build and launch defaults from a YAML config file.
+  --params-file PATH Load node parameters from YAML file after launch.
   -h, --help    Show this help.
 
 Examples:
@@ -56,8 +60,8 @@ set_launch_arg() {
   LAUNCH_ARGS+=("${argument}")
 }
 
-# Resolve --config before loading defaults so every later command-line launch
-# argument can override the selected configuration.
+# Resolve --config and --params-file before loading defaults so every later
+# command-line launch argument can override the selected configuration.
 for ((index = 1; index <= $#; ++index)); do
   case "${!index}" in
     --config)
@@ -70,6 +74,17 @@ for ((index = 1; index <= $#; ++index)); do
       ;;
     --config=*)
       CONFIG_FILE="${!index#--config=}"
+      ;;
+    --params-file)
+      next_index=$((index + 1))
+      if (( next_index > $# )); then
+        echo "--params-file requires a YAML file path." >&2
+        exit 2
+      fi
+      PARAMS_FILE="${!next_index}"
+      ;;
+    --params-file=*)
+      PARAMS_FILE="${!index#--params-file=}"
       ;;
   esac
 done
@@ -163,6 +178,10 @@ while [[ $# -gt 0 ]]; do
       BUILD_ONLY=1
       shift
       ;;
+    --lightweight)
+      LIGHTWEIGHT=1
+      shift
+      ;;
     --rviz)
       set_launch_arg "launch_rviz:=true"
       shift
@@ -171,6 +190,12 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --config=*)
+      shift
+      ;;
+    --params-file)
+      shift 2
+      ;;
+    --params-file=*)
       shift
       ;;
     -h|--help)
@@ -204,17 +229,23 @@ fi
 
 if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   echo "[1/2] Building the complete WUTA-FSD workspace..."
+  
+  # 构建 FSD 参数
+  FSD_BUILD_ARGS=""
   if [[ "${CLEAN}" -eq 1 ]]; then
-    (cd "${FSD_WS}" && ./build_ws.sh --clean)
+    FSD_BUILD_ARGS="--clean"
     rm -rf "${SIM_WS}/build" "${SIM_WS}/install" "${SIM_WS}/log"
     find "${SIM_WS}" -mindepth 2 -maxdepth 5 -type d \
       \( -name "build" -o -name "install" -o -name "log" -o -name "__pycache__" \) \
       -exec rm -rf {} + 2>/dev/null || true
     find "${FSD_WS}" -mindepth 3 -maxdepth 6 -type d -name "__pycache__" \
       -exec rm -rf {} + 2>/dev/null || true
-  else
-    (cd "${FSD_WS}" && ./build_ws.sh)
   fi
+  if [[ "${LIGHTWEIGHT}" -eq 1 ]]; then
+    FSD_BUILD_ARGS="${FSD_BUILD_ARGS} --lightweight"
+  fi
+  
+  (cd "${FSD_WS}" && ./build_ws.sh ${FSD_BUILD_ARGS})
 
   set +u
   source "${FSD_WS}/install/setup.bash"
@@ -223,10 +254,18 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   echo "[2/2] Building the simulator overlay..."
   (
     cd "${SIM_WS}"
-    colcon build \
-      --base-paths . \
-      --symlink-install \
-      --packages-up-to simulator_bringup
+    if [[ "${LIGHTWEIGHT}" -eq 1 ]]; then
+      colcon build \
+        --base-paths . \
+        --symlink-install \
+        --parallel-workers 1 \
+        --packages-up-to simulator_bringup
+    else
+      colcon build \
+        --base-paths . \
+        --symlink-install \
+        --packages-up-to simulator_bringup
+    fi
   )
 fi
 
@@ -250,6 +289,20 @@ if [[ "${BUILD_ONLY}" -eq 1 ]]; then
   exit 0
 fi
 
+# 通过环境变量把用户参数文件注入 launch：节点启动时即带参数，
+# 无需启动后再逐个 ros2 param load（启动即生效，且不依赖 DDS 发现）。
+if [[ -n "${PARAMS_FILE}" ]] && [[ -f "${PARAMS_FILE}" ]]; then
+  export WUTA_PARAMS_FILE="${PARAMS_FILE}"
+  echo "Injecting user parameters from ${PARAMS_FILE} at launch time"
+fi
+
 echo "Starting simulator_bringup..."
 cd "${ROOT_DIR}"
-exec ros2 launch simulator_bringup simulator.launch.py "${LAUNCH_ARGS[@]}"
+
+# Launch simulator in background
+ros2 launch simulator_bringup simulator.launch.py "${LAUNCH_ARGS[@]}" &
+LAUNCH_PID=$!
+
+# Wait for the launch process to finish
+wait $LAUNCH_PID
+exit $?

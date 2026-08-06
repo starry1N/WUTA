@@ -1,0 +1,89 @@
+metadata:
+  description: WUTA 默认参数配置文件
+  format: 按节点分组，启动时通过 ros2 param load 应用到对应节点
+parameters:
+  path_generator_node:
+    trackdrive_velocity: 7.0
+    trackdrive_min_velocity: 3.0
+    trackdrive_lateral_accel_limit: 4.0
+    trackdrive_race_lap2_velocity: 9.0
+    trackdrive_race_velocity: 10.0
+    trackdrive_race_min_velocity: 4.0
+    trackdrive_race_lateral_accel_limit: 6.0
+    trackdrive_short_centerline_velocity: 3.0
+    trackdrive_low_confidence_velocity: 3.0
+    trackdrive_global_horizon_distance: 40.0
+    trackdrive_global_search_points: 24
+    trackdrive_global_min_points: 20
+    trackdrive_min_forward_target: 0.5
+    trackdrive_resample_spacing: 1.0
+    trackdrive_full_speed_forward_distance: 15.0
+    trackdrive_global_publish_period_sec: 0.10
+    trackdrive_confidence_slow_threshold: 0.45
+    trackdrive_confidence_full_threshold: 0.75
+    skidpad_velocity: 5.0
+    skidpad_points: 72
+    skidpad_exit_length: 25.0
+    skidpad_braking_distance: 10.0
+    acceleration_velocity: 15.0
+    acceleration_length: 75.0
+    acceleration_stopping_distance: 100.0
+  boundary_detector_node:
+    lookahead_distance: 15.0
+    global_min_coverage_ratio: 0.6
+    global_pairing_min_width: 1.5
+    global_pairing_max_width: 7.5
+    global_pairing_dedup_distance: 0.75
+    global_max_segment_length: 10.0
+    global_max_closure_distance: 8.0
+    global_min_waypoints: 20
+    local_pairing_min_streak: 3
+    local_pairing_color_imbalance_ratio: 0.20
+    delaunay_min_waypoints: 3
+  cone_map_builder:
+    merge_distance: 0.5
+    min_hit_count: 2
+    loop_closure_distance: 3.0
+    min_cones_for_closure: 10
+    start_skip_distance: 30.0
+    loop_closure_heading_tolerance_deg: 60.0
+    assign_colors: true
+  lidar_detection_node:
+    max_detection_range: 20.0
+    cluster_tolerance: 0.4
+    min_cluster_size: 3
+    max_cluster_size: 200
+    use_ransac: true
+    ground_z_threshold: 0.1
+    ransac_distance_threshold: 0.05
+    voxel_leaf_size: 0.05
+    detector_type: traditional
+  simulated_cone_colorizer:
+    max_match_distance: 1.0
+    max_pose_age_sec: 0.20
+  controller_node:
+    lf: 0.8
+    max_steering_rate_deg_s: 180.0
+    finish_position_tolerance: 0.75
+    finish_speed_threshold: 0.2
+    ld_ratio: 2.0
+    min_lookahead: 2.0
+    max_lookahead: 20.0
+    max_progress_advance: 4
+    skidpad_lookahead: 3.0
+    trackdrive_lookahead: 5.0
+    trackdrive_target_loss_hold_time: 0.5
+    trackdrive_target_loss_hold_speed: 2.0
+  mission_manager_node:
+    min_blue_cones: 12
+    min_yellow_cones: 12
+    min_map_average_confidence: 0.40
+    min_map_color_balance: 0.35
+    min_localization_confidence: 0.45
+    localization_timeout_sec: 0.50
+    lap_min_duration_sec: 10.0
+    lap_min_distance: 30.0
+    lap_arm_distance: 10.0
+    lap_line_half_width: 4.0
+    lap_heading_tolerance_deg: 75.0
+    use_ndt_race_localization: false
