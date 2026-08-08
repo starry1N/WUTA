@@ -266,8 +266,8 @@ cd <repo-root>
 | `boundary_detector` | 新增基于车辆航向、候选点距离和蓝黄锥局部切向的连续性排序 | 避免相邻赛段很近时，中心线从当前赛段跳到错误分支 |
 | `boundary_detector` | 新增局部车辆坐标系左右锥几何配对兜底，并由 `local_pairing_min_streak` 控制启用时机 | 在颜色配对长期不足时提供备用中心线；默认保守启用，避免误配抢走 Delaunay |
 | `boundary_detector.yaml` | `lookahead_distance` 提高到 30 m | 高速 7 m/s 下让局部地图覆盖控制器前视距离，避免每帧只剩很少路径点 |
-| `path_generator` | Trackdrive 中心线按 `trackdrive_resample_spacing=1.0 m` 重采样 | 稀疏中心线变成连续目标点，Pure Pursuit 不再只追末端点 |
-| `path_generator` | Trackdrive 按局部路径曲率限制 waypoint 速度，参数为 `trackdrive_min_velocity` 与 `trackdrive_lateral_accel_limit` | 弯道目标速度可低于直道目标速度，降低紧弯高速过冲风险；不使用赛道 YAML 真值 |
+| `path_generator` | Trackdrive 中心线按 `trackdrive.resample_spacing=1.0 m` 重采样 | 稀疏中心线变成连续目标点，Pure Pursuit 不再只追末端点 |
+| `path_generator` | Trackdrive 按局部路径曲率限制 waypoint 速度，参数为 `trackdrive.explore.min_velocity` 与 `trackdrive.explore.lateral_accel_limit`（RACE 状态用 `trackdrive.race.*`） | 弯道目标速度可低于直道目标速度，降低紧弯高速过冲风险；不使用赛道 YAML 真值 |
 | `controller` | Trackdrive 固定 `trackdrive_lookahead=5.0 m`，并使用前视目标点的速度 | 局部中心线每次刷新都会从车辆起点重新计数；读取前视点速度可将曲率限速带入弯道，避免起点速度恒为 7 m/s |
 | `controller` | 只选择车体前方目标；无前方目标时停车 | 防止瞬时反向路径引导车辆掉头绕圈 |
 | `simulator_bringup` | Trackdrive LiDAR 请求 `fov_deg=360` | 扩大默认前向可见窗口，避免 120 deg 配置在急弯只剩单侧边界 |

@@ -29,11 +29,14 @@ def test_nearest_truth_color_rejects_distant_detection():
     assert _nearest_truth_color(4.0, 1.0, truth, 0.5) is None
 
 
-def test_resolve_track_file_from_wuta_root(tmp_path, monkeypatch):
+def test_resolve_track_file_from_search_dirs(tmp_path, monkeypatch):
     tracks_dir = tmp_path / "tracks"
     tracks_dir.mkdir()
     expected = tracks_dir / "track2.yaml"
     expected.write_text("track: {}\n", encoding="utf-8")
-    monkeypatch.setenv("WUTA_ROOT", str(tmp_path))
+    monkeypatch.setattr(
+        "simulator_bringup.track_truth_map_publisher._track_search_dirs",
+        lambda: [tracks_dir],
+    )
 
     assert _resolve_track_file("track2") == expected

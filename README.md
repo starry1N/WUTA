@@ -440,7 +440,7 @@ metadata:
   format: 按节点分组，启动时由 start_simulator.sh 在 launch 阶段注入生效
 parameters:
   path_generator_node:
-    trackdrive_velocity: 3.0
+    trackdrive.explore.max_velocity: 3.0
   controller_node:
     ld_ratio: 2.5
 ```

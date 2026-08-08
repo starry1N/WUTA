@@ -1,17 +1,33 @@
 """Publish the LiDAR simulator's loaded YAML map as an algorithm-side ConeMap."""
 
-import os
 from pathlib import Path
 from typing import Any, Optional
 
 import rclpy
 import yaml
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import (
+    PackageNotFoundError,
+    get_package_share_directory,
+)
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import UInt32
 from visualization_msgs.msg import Marker, MarkerArray
 from wuta_msgs.msg import Cone, ConeMap
+
+
+def _track_search_dirs() -> list:
+    """Return the unified track directories, mirroring lidar_sim's search order."""
+    dirs = []
+    try:
+        dirs.append(Path(get_package_share_directory("lidar_sim")) / "tracks")
+    except PackageNotFoundError:
+        pass
+    # 开发回退：直接读 perception_simulation 源码赛道目录
+    dirs.append(
+        Path(__file__).resolve().parents[2] / "perception_simulation" / "tracks"
+    )
+    return dirs
 
 
 def _resolve_track_file(value: str) -> Path:
@@ -20,15 +36,8 @@ def _resolve_track_file(value: str) -> Path:
     if candidate.is_file():
         return candidate
 
-    search_dirs = [
-        Path(get_package_share_directory("lidar_sim")) / "tracks",
-        Path.cwd() / "tracks",
-    ]
-    if os.environ.get("WUTA_ROOT"):
-        search_dirs.insert(1, Path(os.environ["WUTA_ROOT"]) / "tracks")
-
     names = (value, f"{value}.yaml") if not Path(value).suffix else (value,)
-    for tracks_dir in search_dirs:
+    for tracks_dir in _track_search_dirs():
         for name in names:
             candidate = tracks_dir / name
             if candidate.is_file():
