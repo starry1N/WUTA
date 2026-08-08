@@ -29,19 +29,18 @@ git submodule update --init --recursive
 | --- | --- |
 | 仿真 LiDAR | `WUTA-SIM/perception_simulation/config/lidar_simulator.yaml` |
 | 仿真 INS（submodule） | `WUTA-SIM/wuta-ins-simulator/launch/ins_simulator.launch.py` |
-| 赛道 | 标准赛道位于 `WUTA-SIM/perception_simulation/tracks/`；Trackdrive 验收赛道 `track2.yaml` 位于根目录 `tracks/` |
+| 赛道 | 全部位于 `WUTA-SIM/perception_simulation/tracks/` |
 | 感知/地图/规划/控制 | 各 FSD package 的 `config/*.yaml` |
 | KISS-ICP | `WUTA-FSD/ros2_ws/src/localization/kiss_icp_wrapper/config/kiss_icp_hesai128.yaml` |
 | EKF | `WUTA-FSD/ros2_ws/src/localization/localization_manager/config/ekf.yaml` |
 | NDT/保存地图 | `WUTA-FSD/ros2_ws/src/localization/ndt_localization/config/ndt_localization.yaml` |
 | RViz | `WUTA-SIM/simulator_bringup/rviz/wuta_simulator.rviz` |
 
-赛道名不是以仓库根目录优先解析：LiDAR 和真值地图/颜色节点都会先查已安装的
-`lidar_sim/tracks/`；LiDAR 随后查其源码 `tracks/` 与当前目录 `tracks/`，后两个
-simulator_bringup 节点则随后查 `WUTA_ROOT/tracks/` 与当前目录 `tracks/`。因此需要明确
-选择根目录或新建赛道版本时，必须传入绝对 YAML 路径，例如
-`track_file:=${WUTA_ROOT}/tracks/track2.yaml`；不要依赖同名文件的搜索优先级。标准
-Trackdrive 仍可用 `track_file:=trackdrive` 覆盖。
+赛道名不是以仓库根目录优先解析：LiDAR 和真值地图/颜色节点统一先查已安装的
+`lidar_sim/tracks/`（构建时由 `perception_simulation/tracks/` 复制），未安装时回退到
+源码 `perception_simulation/tracks/`。因此新建赛道只需放入 `WUTA-SIM/perception_simulation/tracks/`
+并重建；若需精确定位可传入绝对 YAML 路径，例如 `track_file:=/abs/path/to/track.yaml`。
+标准 Trackdrive 仍可用 `track_file:=trackdrive` 覆盖。
 
 部署前为真实硬件复核 frame、话题名、QoS、LiDAR 外参和 EKF 输入。NDT 默认地图路径为
 `/tmp/wuta_lidar_map.pcd`；锥筒地图保存默认 `/tmp/wuta_cone_map.yaml`，应替换为有权限且

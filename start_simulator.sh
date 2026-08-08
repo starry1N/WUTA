@@ -2,7 +2,6 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export WUTA_ROOT="${ROOT_DIR}"
 FSD_WS="${ROOT_DIR}/WUTA-FSD/ros2_ws"
 SIM_WS="${ROOT_DIR}/WUTA-SIM"
 FSD_BUILD_SCRIPT="${FSD_WS}/build_ws.sh"

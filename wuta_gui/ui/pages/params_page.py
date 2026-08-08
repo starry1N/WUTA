@@ -84,110 +84,116 @@ class ParamsPage(QWidget):
             'node': 'path_generator_node'
         },
 
-        # === Trackdrive（速度 + 路径几何） ===
-        'trackdrive_velocity': {
+        # === Trackdrive（EXPLORE / RACE 速度 + 路径几何） ===
+        'trackdrive.explore.max_velocity': {
             'type': 'float', 'default': 7.0, 'range': (1.0, 20.0),
             'unit': 'm/s', 'category': 'Trackdrive',
-            'desc': '第1圈（建图圈）速度上限',
+            'desc': '第1圈（探索圈）速度上限',
             'node': 'path_generator_node'
         },
-        'trackdrive_min_velocity': {
+        'trackdrive.explore.min_velocity': {
             'type': 'float', 'default': 3.0, 'range': (0.5, 10.0),
             'unit': 'm/s', 'category': 'Trackdrive',
             'desc': '第1圈最低速度（速度过渡下限）',
             'node': 'path_generator_node'
         },
-        'trackdrive_lateral_accel_limit': {
+        'trackdrive.explore.lateral_accel_limit': {
             'type': 'float', 'default': 4.0, 'range': (0.5, 15.0),
             'unit': 'm/s²', 'category': 'Trackdrive',
             'desc': '第1圈横向加速度限制（曲率限速）',
             'node': 'path_generator_node'
         },
-        'trackdrive_race_lap2_velocity': {
+        'trackdrive.race.lap2_max_velocity': {
             'type': 'float', 'default': 9.0, 'range': (1.0, 25.0),
             'unit': 'm/s', 'category': 'Trackdrive',
-            'desc': '比赛圈速度上限（第2圈，lap_count≤1）',
+            'desc': '第2圈速度上限（lap_count≤1）',
             'node': 'path_generator_node'
         },
-        'trackdrive_race_velocity': {
+        'trackdrive.race.lap3_max_velocity': {
             'type': 'float', 'default': 10.0, 'range': (1.0, 25.0),
             'unit': 'm/s', 'category': 'Trackdrive',
-            'desc': '比赛圈速度上限（第3圈，lap_count>1）',
+            'desc': '第3圈起速度上限（lap_count>1）',
             'node': 'path_generator_node'
         },
-        'trackdrive_race_min_velocity': {
+        'trackdrive.race.min_velocity': {
             'type': 'float', 'default': 4.0, 'range': (0.5, 10.0),
             'unit': 'm/s', 'category': 'Trackdrive',
             'desc': '比赛圈最低速度（速度过渡下限）',
             'node': 'path_generator_node'
         },
-        'trackdrive_race_lateral_accel_limit': {
+        'trackdrive.race.lateral_accel_limit': {
             'type': 'float', 'default': 6.0, 'range': (0.5, 15.0),
             'unit': 'm/s²', 'category': 'Trackdrive',
             'desc': '比赛圈横向加速度限制（曲率限速）',
             'node': 'path_generator_node'
         },
-        'trackdrive_short_centerline_velocity': {
-            'type': 'float', 'default': 3.0, 'range': (0.5, 10.0),
-            'unit': 'm/s', 'category': 'Trackdrive',
-            'desc': '短中心线限速（点数过少时触发）',
-            'node': 'path_generator_node'
-        },
-        'trackdrive_low_confidence_velocity': {
-            'type': 'float', 'default': 3.0, 'range': (0.5, 10.0),
-            'unit': 'm/s', 'category': 'Trackdrive',
-            'desc': '置信度为0时的速度下限',
-            'node': 'path_generator_node'
-        },
-        'trackdrive_confidence_slow_threshold': {
-            'type': 'float', 'default': 0.45, 'range': (0.0, 1.0),
-            'unit': '', 'category': 'Trackdrive',
-            'desc': '置信度下限（低于此值速度=low_confidence_velocity）',
-            'node': 'path_generator_node'
-        },
-        'trackdrive_confidence_full_threshold': {
-            'type': 'float', 'default': 0.75, 'range': (0.0, 1.0),
-            'unit': '', 'category': 'Trackdrive',
-            'desc': '置信度上限（高于此值速度=max_velocity）',
-            'node': 'path_generator_node'
-        },
-        'trackdrive_global_horizon_distance': {
-            'type': 'float', 'default': 40.0, 'range': (10.0, 100.0),
-            'unit': 'm', 'category': 'Trackdrive',
-            'desc': '全局路径发布的前视距离',
-            'node': 'path_generator_node'
-        },
-        'trackdrive_global_search_points': {
-            'type': 'int', 'default': 24, 'range': (3, 100),
-            'unit': '', 'category': 'Trackdrive',
-            'desc': '全局路径搜索点数（从近到远搜索）',
-            'node': 'path_generator_node'
-        },
-        'trackdrive_global_min_points': {
-            'type': 'int', 'default': 20, 'range': (5, 100),
-            'unit': '', 'category': 'Trackdrive',
-            'desc': '识别为全局环线的最小点数阈值',
-            'node': 'path_generator_node'
-        },
-        'trackdrive_min_forward_target': {
-            'type': 'float', 'default': 0.5, 'range': (0.1, 5.0),
-            'unit': 'm', 'category': 'Trackdrive',
-            'desc': '最小前向目标距离（过滤反向路径）',
-            'node': 'path_generator_node'
-        },
-        'trackdrive_resample_spacing': {
+        'trackdrive.resample_spacing': {
             'type': 'float', 'default': 1.0, 'range': (0.2, 5.0),
             'unit': 'm', 'category': 'Trackdrive',
             'desc': '路径重采样间距（均匀化路径点）',
             'node': 'path_generator_node'
         },
-        'trackdrive_full_speed_forward_distance': {
+        'trackdrive.min_forward_target': {
+            'type': 'float', 'default': 0.5, 'range': (0.1, 5.0),
+            'unit': 'm', 'category': 'Trackdrive',
+            'desc': '最小前向目标距离（过滤反向路径）',
+            'node': 'path_generator_node'
+        },
+        'trackdrive.full_speed_forward_distance': {
             'type': 'float', 'default': 15.0, 'range': (5.0, 50.0),
             'unit': 'm', 'category': 'Trackdrive',
             'desc': '速度过渡距离（min→max速度线性过渡）',
             'node': 'path_generator_node'
         },
-        'trackdrive_global_publish_period_sec': {
+        'trackdrive.degraded_velocity': {
+            'type': 'float', 'default': 3.0, 'range': (0.5, 10.0),
+            'unit': 'm/s', 'category': 'Trackdrive',
+            'desc': '降级速度帽（短中心线或低置信度时触发）',
+            'node': 'path_generator_node'
+        },
+        'trackdrive.short_centerline_points': {
+            'type': 'int', 'default': 3, 'range': (2, 20),
+            'unit': '点', 'category': 'Trackdrive',
+            'desc': '源中心线点数低于此值视为短路径（触发降级限速）',
+            'node': 'path_generator_node'
+        },
+        'trackdrive.confidence.slow_threshold': {
+            'type': 'float', 'default': 0.45, 'range': (0.0, 1.0),
+            'unit': '', 'category': 'Trackdrive',
+            'desc': '置信度下限（低于此值速度=降级速度）',
+            'node': 'path_generator_node'
+        },
+        'trackdrive.confidence.full_threshold': {
+            'type': 'float', 'default': 0.75, 'range': (0.0, 1.0),
+            'unit': '', 'category': 'Trackdrive',
+            'desc': '置信度上限（高于此值速度=当前圈速度上限）',
+            'node': 'path_generator_node'
+        },
+        'trackdrive.confidence.timeout_sec': {
+            'type': 'float', 'default': 0.50, 'range': (0.05, 2.0),
+            'unit': 's', 'category': 'Trackdrive',
+            'desc': '位姿超时（超过则置信度为0，触发降级限速）',
+            'node': 'path_generator_node'
+        },
+        'trackdrive.global.horizon_distance': {
+            'type': 'float', 'default': 40.0, 'range': (10.0, 100.0),
+            'unit': 'm', 'category': 'Trackdrive',
+            'desc': '全局路径发布的前视距离',
+            'node': 'path_generator_node'
+        },
+        'trackdrive.global.search_points': {
+            'type': 'int', 'default': 24, 'range': (3, 100),
+            'unit': '', 'category': 'Trackdrive',
+            'desc': '全局路径搜索点数（从近到远搜索）',
+            'node': 'path_generator_node'
+        },
+        'trackdrive.global.min_points': {
+            'type': 'int', 'default': 20, 'range': (5, 100),
+            'unit': '', 'category': 'Trackdrive',
+            'desc': '识别为全局环线的最小点数阈值',
+            'node': 'path_generator_node'
+        },
+        'trackdrive.global.publish_period_sec': {
             'type': 'float', 'default': 0.10, 'range': (0.01, 1.0),
             'unit': 's', 'category': 'Trackdrive',
             'desc': '全局路径发布周期（10Hz）',

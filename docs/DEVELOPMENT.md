@@ -91,11 +91,11 @@ INS 包位于 `WUTA-SIM/wuta-ins-simulator`，并已是 `simulator_bringup` 的�
 
 ## 4. 配置与调试规则
 
-- 配置文件位于各包 `config/`；标准赛道 YAML 位于
-  `WUTA-SIM/perception_simulation/tracks/`，在线建图验收用 `track2.yaml` 位于根目录 `tracks/`。
+- 配置文件位于各包 `config/`；标准赛道 YAML 全部位于
+  `WUTA-SIM/perception_simulation/tracks/`。
   当前标准文件为 `trackdrive.yaml`、`skidpad.yaml` 与 `acceleration.yaml`；
   `trackdrive1.yaml` 已删除，新的默认/测试配置不得再引用它。不要把生成的
-  `/tmp/wuta_*.yaml`/PCD 当作源码。同名赛道会优先命中已安装的 `lidar_sim/tracks/`；调试根目录
+  `/tmp/wuta_*.yaml`/PCD 当作源码。同名赛道会优先命中已安装的 `lidar_sim/tracks/`；调试源码
   或新版本 YAML 时请传绝对 `track_file:=...`，以确保 LiDAR、真值地图和颜色节点加载同一文件。
 - 默认模式下，`/sim/lidar/track_cones` 是 YAML 真值，`/mapping/cone_map_viz` 是 FSD 估计地图。
   `use_track_truth_map:=true` 时后者改由同一 YAML 转换的真值 `ConeMap` 渲染；调试记录必须标明当前模式，
