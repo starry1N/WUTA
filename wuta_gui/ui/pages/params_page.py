@@ -380,7 +380,7 @@ class ParamsPage(QWidget):
             'node': 'controller_node'
         },
         'skidpad_lookahead': {
-            'type': 'float', 'default': 3.0, 'range': (1.0, 10.0),
+            'type': 'float', 'default': 2.5, 'range': (1.0, 10.0),
             'unit': 'm', 'category': '车辆控制',
             'desc': '绕桩固定前瞻距离',
             'node': 'controller_node'
@@ -389,6 +389,12 @@ class ParamsPage(QWidget):
             'type': 'float', 'default': 5.0, 'range': (1.0, 20.0),
             'unit': 'm', 'category': '车辆控制',
             'desc': '赛道固定前瞻距离',
+            'node': 'controller_node'
+        },
+        'trackdrive_min_lookahead': {
+            'type': 'float', 'default': 3.0, 'range': (0.5, 10.0),
+            'unit': 'm', 'category': '车辆控制',
+            'desc': '赛道弯道最小前瞻距离',
             'node': 'controller_node'
         },
         'trackdrive_target_loss_hold_time': {
@@ -533,6 +539,75 @@ class ParamsPage(QWidget):
             'category': '任务管理',
             'desc': '比赛时使用 NDT 定位',
             'node': 'mission_manager_node'
+        },
+
+        # === 车辆模型（动力学单轨模型） ===
+        'mass': {
+            'type': 'float', 'default': 250.0, 'range': (100.0, 1000.0),
+            'unit': 'kg', 'category': '车辆模型',
+            'desc': '整车质量（含车手）',
+            'node': 'vehicle_model'
+        },
+        'iz': {
+            'type': 'float', 'default': 300.0, 'range': (50.0, 1000.0),
+            'unit': 'kg·m²', 'category': '车辆模型',
+            'desc': '横摆转动惯量',
+            'node': 'vehicle_model'
+        },
+        'vehicle_model_lf': {
+            'type': 'float', 'default': 0.77, 'range': (0.3, 1.2),
+            'unit': 'm', 'category': '车辆模型',
+            'desc': '质心到前轴距离',
+            'node': 'vehicle_model',
+            'param': 'lf'
+        },
+        'cf': {
+            'type': 'float', 'default': 200000.0, 'range': (50000.0, 400000.0),
+            'unit': 'N/rad', 'category': '车辆模型',
+            'desc': '前轴侧偏刚度',
+            'node': 'vehicle_model'
+        },
+        'cr': {
+            'type': 'float', 'default': 200000.0, 'range': (50000.0, 400000.0),
+            'unit': 'N/rad', 'category': '车辆模型',
+            'desc': '后轴侧偏刚度',
+            'node': 'vehicle_model'
+        },
+        'friction_coeff': {
+            'type': 'float', 'default': 1.2, 'range': (0.5, 2.5),
+            'unit': 'μ', 'category': '车辆模型',
+            'desc': '轮胎附着系数（摩擦圆饱和上限）',
+            'node': 'vehicle_model'
+        },
+        'tau_steer': {
+            'type': 'float', 'default': 0.1, 'range': (0.01, 1.0),
+            'unit': 's', 'category': '车辆模型',
+            'desc': '转向一阶时间常数',
+            'node': 'vehicle_model'
+        },
+        'speed_gain': {
+            'type': 'float', 'default': 2.0, 'range': (0.5, 10.0),
+            'unit': '1/s', 'category': '车辆模型',
+            'desc': '速度 P 控制器增益',
+            'node': 'vehicle_model'
+        },
+        'max_accel': {
+            'type': 'float', 'default': 3.0, 'range': (0.5, 15.0),
+            'unit': 'm/s²', 'category': '车辆模型',
+            'desc': '最大加速度',
+            'node': 'vehicle_model'
+        },
+        'max_decel': {
+            'type': 'float', 'default': 5.0, 'range': (0.5, 20.0),
+            'unit': 'm/s²', 'category': '车辆模型',
+            'desc': '最大减速度',
+            'node': 'vehicle_model'
+        },
+        'v_kin_thresh': {
+            'type': 'float', 'default': 1.0, 'range': (0.1, 5.0),
+            'unit': 'm/s', 'category': '车辆模型',
+            'desc': '低速运动学回退阈值',
+            'node': 'vehicle_model'
         },
     }
 
@@ -781,6 +856,13 @@ class ParamsPage(QWidget):
                 params[name] = w.text()
         return params
 
+    def _find_widget_key(self, node: str, param: str) -> str:
+        """按 (节点, 真实参数名) 反查 PARAM_DEFS 的 widget 键"""
+        for key, defs in self.PARAM_DEFS.items():
+            if defs.get('node') == node and defs.get('param', key) == param:
+                return key
+        return param  # 找不到则按参数名直接匹配
+
     def apply_params(self, params: Dict[str, Any]):
         """应用参数值到界面（外部调用）"""
         for name, value in params.items():
@@ -827,11 +909,13 @@ class ParamsPage(QWidget):
             self.feedback.emit("error", "没有可保存的参数")
             return
 
-        # 按节点分组
+        # 按节点分组（键可能与真实参数名不同，取 defs['param']）
         node_params: Dict[str, Dict[str, Any]] = {}
         for name_key, value in params.items():
-            node = self.PARAM_DEFS[name_key].get('node', 'unknown')
-            node_params.setdefault(node, {})[name_key] = value
+            defs = self.PARAM_DEFS.get(name_key, {})
+            node = defs.get('node', 'unknown')
+            param = defs.get('param', name_key)
+            node_params.setdefault(node, {})[param] = value
 
         # 保存到 YAML
         save_data = {
@@ -882,11 +966,13 @@ class ParamsPage(QWidget):
             # 1. 扁平格式 {param_name: value, ...}
             # 2. 节点分组格式 {parameters: {node: {param_name: value}}}
             if 'parameters' in data and isinstance(data['parameters'], dict):
-                # 节点分组格式，展平
+                # 节点分组格式：按 (节点, 参数名) 反查 widget 键
                 flat_params = {}
-                for node_params in data['parameters'].values():
-                    if isinstance(node_params, dict):
-                        flat_params.update(node_params)
+                for node, node_params in data['parameters'].items():
+                    if not isinstance(node_params, dict):
+                        continue
+                    for pname, value in node_params.items():
+                        flat_params[self._find_widget_key(node, pname)] = value
                 self.apply_params(flat_params)
             else:
                 # 扁平格式
