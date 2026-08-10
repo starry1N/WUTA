@@ -302,6 +302,27 @@ cd "${ROOT_DIR}"
 ros2 launch simulator_bringup simulator.launch.py "${LAUNCH_ARGS[@]}" &
 LAUNCH_PID=$!
 
+# 停止时清理后台进程树。直接 Ctrl+C 只会杀死本脚本（bash 后台作业
+# 忽略 SIGINT），ros2 launch 及节点会残留，必须显式清理。
+cleanup() {
+  local code=$?
+  echo ""
+  echo "Stopping simulator and cleaning up background processes..."
+  if [[ -n "${LAUNCH_PID:-}" ]]; then
+    kill -TERM "${LAUNCH_PID}" 2>/dev/null || true
+  fi
+  # 兜底：清理脱离进程组的残留模拟器节点（如 ins_simulator）
+  pkill -TERM -f "${SIM_WS}/install" 2>/dev/null || true
+  pkill -TERM -f "simulator.launch.py" 2>/dev/null || true
+  sleep 2
+  pkill -KILL -f "${SIM_WS}/install" 2>/dev/null || true
+  pkill -KILL -f "simulator.launch.py" 2>/dev/null || true
+  # 清理 launch 生成的临时参数文件
+  rm -f /tmp/launch_params_* 2>/dev/null || true
+  exit ${code}
+}
+trap cleanup EXIT INT TERM
+
 # Wait for the launch process to finish
 wait $LAUNCH_PID
 exit $?

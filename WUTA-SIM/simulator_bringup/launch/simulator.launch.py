@@ -116,20 +116,26 @@ def generate_launch_description():
 
     # Stage 1: the source of truth.  vehicle_model depends at build/runtime on
     # autoware_msgs from WUTA-FSD and publishes /sim/ground_truth.
+    vehicle_launch_arguments = {
+        "wheel_base": LaunchConfiguration("wheel_base"),
+        "max_steer_angle": LaunchConfiguration("max_steer_angle"),
+        "dt": LaunchConfiguration("vehicle_dt"),
+        "start_x": vehicle_start_x,
+        "start_y": LaunchConfiguration("start_y"),
+        "start_yaw": LaunchConfiguration("start_yaw"),
+    }
+    # 用户参数（GUI 保存的 YAML）透传给 vehicle_model 子 launch
+    vehicle_user_params = _USER_PARAMS.get("vehicle_model")
+    if isinstance(vehicle_user_params, dict) and vehicle_user_params:
+        vehicle_launch_arguments.update(
+            {k: str(v) for k, v in vehicle_user_params.items()})
     vehicle = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution(
                 [vehicle_share, "launch", "vehicle_model.launch.py"]
             )
         ),
-        launch_arguments={
-            "wheel_base": LaunchConfiguration("wheel_base"),
-            "max_steer_angle": LaunchConfiguration("max_steer_angle"),
-            "dt": LaunchConfiguration("vehicle_dt"),
-            "start_x": vehicle_start_x,
-            "start_y": LaunchConfiguration("start_y"),
-            "start_yaw": LaunchConfiguration("start_yaw"),
-        }.items(),
+        launch_arguments=vehicle_launch_arguments.items(),
     )
 
     # Stage 2: all currently implemented sensors/feedback depend on ground

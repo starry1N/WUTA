@@ -71,10 +71,23 @@ parameters:
     min_lookahead: 2.0
     max_lookahead: 20.0
     max_progress_advance: 4
-    skidpad_lookahead: 3.0
+    skidpad_lookahead: 2.5
     trackdrive_lookahead: 5.0
+    trackdrive_min_lookahead: 3.0
     trackdrive_target_loss_hold_time: 0.5
     trackdrive_target_loss_hold_speed: 2.0
+  vehicle_model:
+    mass: 250.0
+    iz: 300.0
+    lf: 0.77
+    cf: 200000.0
+    cr: 200000.0
+    friction_coeff: 1.2
+    tau_steer: 0.1
+    speed_gain: 2.0
+    max_accel: 3.0
+    max_decel: 5.0
+    v_kin_thresh: 1.0
   mission_manager_node:
     min_blue_cones: 12
     min_yellow_cones: 12

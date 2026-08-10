@@ -215,22 +215,57 @@ class Launcher(QObject):
             try:
                 # 发送 SIGTERM 到进程组
                 os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
-                
+
                 # 等待 2 秒
                 time.sleep(2)
-                
+
                 # 如果还在运行，强制终止
                 if self.process.poll() is None:
                     os.killpg(os.getpgid(self.process.pid), signal.SIGKILL)
-                    
+
             except (ProcessLookupError, OSError):
                 pass
-        
+
+        # 兜底：清理脱离进程组而残留的模拟器节点
+        # （killpg 只覆盖 start_simulator.sh 的进程组，嵌套 launch 的
+        #   节点如 ins_simulator 可能处于独立会话，必须按命令匹配清理）
+        self._cleanup_leftovers()
+
         # 更新状态
         state = self._load_state()
         if state:
             state["status"] = "stopped"
             self._save_state(state)
+
+    def _cleanup_leftovers(self):
+        """清理仿真残留进程与 launch 临时文件（幂等，失败静默）"""
+        patterns = [
+            str(self.wuta_root / "WUTA-SIM" / "install"),
+            "simulator.launch.py",
+        ]
+        try:
+            for pattern in patterns:
+                subprocess.run(
+                    ["pkill", "-TERM", "-f", pattern],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            time.sleep(1.5)
+            for pattern in patterns:
+                subprocess.run(
+                    ["pkill", "-KILL", "-f", pattern],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            # 清理 launch 生成的临时参数文件
+            import glob
+            for path in glob.glob("/tmp/launch_params_*"):
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+        except Exception:
+            pass
     
     def is_running(self) -> bool:
         """检查仿真是否正在运行"""

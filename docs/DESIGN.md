@@ -99,7 +99,8 @@ KISS 持续运行并为诊断及 map_saver 提供数据，但其全局位姿不�
 bringup 另发布静态同原点
 `map -> odom` 与 `base_link -> lidar`，避免 TF 发布者冲突。`LocalizationManager` 在
 `LOC_KISS_ICP` 时将 `/odometry/filtered` 转为 `/localization/pose`，在 `LOC_NDT` 时接受
-`/ndt/pose`；它拒绝非有限位姿/协方差，并在 `FINISH` 或 `EMERGENCY` 停止继续转发位姿。
+`/ndt/pose`；它拒绝非有限位姿/协方差，并在 `FINISH` 停止继续转发位姿（`EMERGENCY` 后
+仍转发，供 driven trajectory 绘制制动轨迹，但定位保持不可用）。
 `use_ground_truth_localization:=true` 是调试回退，不应与默认 EKF TF 并用。
 该参数为 `false` 时，`simulation_bridge` 不创建真值 pose publisher 或 TF broadcaster。
 NDT 读取 PCD 地图、等待初始位姿，在 NDT 模式对降采样 scan 匹配并维护最多 500 个 pose
@@ -111,7 +112,8 @@ TF 假设。
 `path_generator` 发布 `/planning/final_waypoints_viz`（规划参考路径）和
 `/planning/driven_trajectory_viz`（定位估计的实际行驶轨迹）。后者只在可视化层对
 `/localization/pose` 做一阶平滑与最小空间间隔采样，并拒绝非有限值及超过
-`driven_trajectory_max_step` 的显示跳变；`FINISH/EMERGENCY` 后停止追加。它不回写 EKF、不改变
+`driven_trajectory_max_step` 的显示跳变；`FINISH` 后停止追加（`EMERGENCY` 后继续追加，
+覆盖车辆制动滑行段，车辆停稳后由最小空间间隔自然截止）。它不回写 EKF、不改变
 建图，也不改变控制输入。
 因此 Ground Truth 用于判断仿真车辆真实运动，Driven Trajectory 用于观察实车可获得的定位轨迹。
 
