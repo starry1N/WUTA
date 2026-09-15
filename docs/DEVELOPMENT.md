@@ -165,3 +165,10 @@ INS 包位于 `WUTA-SIM/wuta-ins-simulator`，并已是 `simulator_bringup` 的�
 新增 ROS package 前，至少提供 `package.xml`、CMakeLists/setup.py、可执行入口、launch 或
 明确运行说明、config（若有参数）、测试和文档。若新增 topic/service/action，必须在合并前
 更新架构图、接口表及部署检查命令。
+
+## 后融合开发
+
+独立入口：`./start_fusion_simulator.sh --rviz`，可用 `--skip-build`、`--lightweight`。
+新消息需先构建 wuta_msgs，再构建 camera_detection、detection_fusion、cone_map_builder 及 simulator_bringup。
+算法测试分别在 camera_detection 和 detection_fusion 包内运行 `PYTHONPATH=. python3 -m pytest test -q`。
+真实相机和 YOLO 权重未提供；不要将模拟检测当作模型性能测试。见 [接口与验证说明](LATE_FUSION.md)。

@@ -87,13 +87,26 @@ def generate_launch_description():
             "'", LaunchConfiguration("launch_fsd"), "' == 'true' and '",
             LaunchConfiguration("use_track_truth_map"), "' == 'false' and '",
             LaunchConfiguration("use_simulated_cone_colors"), "' == 'true'",
+            " and '", LaunchConfiguration("use_detection_fusion"), "' == 'false'",
         ])
     )
     perception_output_topic = PythonExpression([
         "'/perception/lidar/cones_raw' if '",
         LaunchConfiguration("use_simulated_cone_colors"),
+        "' == 'true' or '", LaunchConfiguration("use_detection_fusion"),
         "' == 'true' else '/perception/lidar/cones'",
     ])
+
+    fsd_with_fusion = IfCondition(PythonExpression([
+        "'", LaunchConfiguration("launch_fsd"), "' == 'true' and '",
+        LaunchConfiguration("use_track_truth_map"), "' == 'false' and '",
+        LaunchConfiguration("use_detection_fusion"), "' == 'true'",
+    ]))
+    fusion = Node(
+        package="detection_fusion", executable="detection_fusion_node",
+        parameters=[PathJoinSubstitution([
+            FindPackageShare("detection_fusion"), "config", "fusion.yaml"])],
+        output="screen", condition=fsd_with_fusion)
 
     vehicle_share = FindPackageShare("vehicle_model")
     can_share = FindPackageShare("can_simulator")
@@ -341,12 +354,22 @@ def generate_launch_description():
                     PythonExpression([
                         "'",
                         LaunchConfiguration("use_simulated_cone_colors"),
+                        "' == 'false' and '", LaunchConfiguration("use_detection_fusion"),
                         "' == 'false'",
                     ]),
                     value_type=bool,
                 ),
+                "semantic_color_confirmation_hits": ParameterValue(
+                    PythonExpression(["3 if '", LaunchConfiguration("use_detection_fusion"),
+                                      "' == 'true' else 1"]), value_type=int),
+                "allow_semantic_color_correction": ParameterValue(
+                    LaunchConfiguration("use_detection_fusion"), value_type=bool),
             },
         ], "cone_map_builder"),
+        remappings=[("/perception/lidar/cones", PythonExpression([
+            "'/perception/fused/cones' if '", LaunchConfiguration("use_detection_fusion"),
+            "' == 'true' else '/perception/lidar/cones'",
+        ]))],
         output="screen",
         condition=fsd_with_perception,
     )
@@ -420,6 +443,7 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
+            DeclareLaunchArgument("use_detection_fusion", default_value="false", choices=["true", "false"]),
             DeclareLaunchArgument(
                 "track_file",
                 default_value=default_track,
@@ -603,6 +627,7 @@ def generate_launch_description():
                 track_truth_map,
                 simulated_cone_colorizer,
                 lidar_detection,
+                fusion,
             ),
             _delayed(PythonExpression([delay, " * 4"]), cone_map_builder),
             _delayed(PythonExpression([delay, " * 5"]), boundary_detector),

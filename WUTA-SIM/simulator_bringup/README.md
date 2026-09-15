@@ -352,3 +352,10 @@ ros2 run tf2_tools view_frames
 如果 RViz 提示 `No transform from [lidar] to [map]`，先确认仿真仍在运行，并检查静态
 `map -> odom`、EKF 的 `odom -> base_link`、以及静态 `base_link -> lidar`。如果只缺点云显示，检查 `/hesai/pandar` Display 的
 `Reliability Policy` 是否为 `Best Effort`。
+
+## 独立双目后融合实验
+
+`ros2 launch simulator_bringup fusion_simulator.launch.py track_file:=trackdrive` 或根目录
+`./start_fusion_simulator.sh --rviz`。该模式以独立相机模拟检测进入 detection_fusion，
+LiDAR 点云经过真实检测代码，不直接读取 YAML 作为 ConeMap。默认定位为 INS/EKF。
+详见根目录 `docs/LATE_FUSION.md`；相机模拟不是 YOLO 推理或真实深度图渲染。

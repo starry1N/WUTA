@@ -103,9 +103,12 @@ graph TD
 | `map_saver_node` | `ndt_localization` | 否 | 探索阶段累积/下采样点云并保存 PCD；点云、KISS odom、状态 → `/ndt/map_ready` |
 | `ekf_node` / `ukf_node` / `navsat_transform_node` / `robot_localization_listener_node` | `robot_localization`（源码依赖） | 仅 `ekf_node` 是（`launch_localization=true` 且未启用真值定位） | 第三方滤波、地理坐标转换和监听工具 |
 
-`autoware_msgs`、`wuta_msgs` 和 `wuta_tools` 是接口/工具包，不提供节点。`camera_detection` 与
-`detection_fusion` 具有 package 元数据，但当前源码树中没有由本项目 CMake/launch 暴露的
-可执行节点；`kiss_icp_wrapper` 提供上述可选 sanitizer。
+`autoware_msgs`、`wuta_msgs` 和 `wuta_tools` 是接口/工具包，不提供节点。
+`camera_detection` 提供 `stereo_detection_adapter`（外部 YOLO 框+对齐深度），
+`detection_fusion` 提供 `detection_fusion_node`（投影/三维一对一关联及位置/颜色融合）。
+它们通过独立融合入口启用；真实相机驱动和 YOLO 推理仍预留。
+`simulator_bringup` 的 `simulated_stereo_detections` 在该入口模拟相机观测。
+详细架构、消息与限制见 [后融合说明](LATE_FUSION.md)。`kiss_icp_wrapper` 提供上述可选 sanitizer。
 
 仿真中 `simulation_bridge` 充当临时 VCU 输入源：它周期发布 mission mode、GO/start、
 `emergency=false` 与 `inspection_trigger=false` 给 `mission_manager`。实车应由 CAN 接口替换这组

@@ -121,3 +121,10 @@ RViz Fixed Frame 设为 `map`。若 `Visible Cones` 报 transform 错误，检�
    多 frame 实车建图；
 5. 验证紧急制动与 VCU/CAN：`mission_manager` 的 CAN 车检发送当前未实现，不能作为安全
    功能部署依据。
+
+## 后融合部署入口
+
+仿真：`./start_fusion_simulator.sh --rviz`。
+硬件适配：`ros2 launch detection_fusion fusion_mapping.launch.py`；外部提供 LiDAR、YOLOv8 检测框、
+注册深度图、CameraInfo 和定位 TF。该入口默认仅补颜色，完成位置参考/外参/误差模型校准后再开启
+fuse_positions。参见 [后融合部署契约](LATE_FUSION.md)。

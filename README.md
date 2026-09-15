@@ -570,3 +570,15 @@ ros2 run tf2_tools view_frames
 如果 RViz 提示 `No transform from [lidar] to [map]`，先确认仿真仍在运行，并检查静态
 `map -> odom`、EKF 的 `odom -> base_link`、以及静态 `base_link -> lidar`。如果只缺点云显示，检查 `/hesai/pandar` Display 的
 `Reliability Policy` 是否为 `Best Effort`。
+
+## 双目 YOLOv8 / LiDAR 后融合独立入口
+
+```bash
+./start_fusion_simulator.sh --rviz
+./start_fusion_simulator.sh --skip-build track_file:=track6 mission_mode:=trackdrive
+```
+
+以独立模拟相机检测框、颜色和带噪深度与 LiDAR 聚类结果后融合，仍由定位 TF 和
+cone_map_builder 逐帧建图；RViz 显示原始 `/hesai/pandar` 点云和融合锥筒地图。
+默认使用 INS/EKF，不启用真值地图快捷输入。真实驱动和 YOLOv8 推理预留，
+已实现深度适配与后融合节点。完整接口、实机接入条件及限制见 [后融合说明](docs/LATE_FUSION.md)。

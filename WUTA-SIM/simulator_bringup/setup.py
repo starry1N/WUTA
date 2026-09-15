@@ -29,6 +29,7 @@ setup(
     entry_points={
         "console_scripts": [
             "simulation_bridge = simulator_bringup.simulation_bridge:main",
+            "simulated_stereo_detections = simulator_bringup.simulated_stereo_detections:main",
             "simulated_cone_colorizer = simulator_bringup.simulated_cone_colorizer:main",
             "track_truth_map_publisher = simulator_bringup.track_truth_map_publisher:main",
         ],
