@@ -7,6 +7,9 @@
 这些驱动不在当前源码中。不要把 simulator 的 `/sim/ground_truth` 或
 `simulation_bridge` 当作实车定位源。
 
+工控机独立感知已接入外部 ZED 2i/M1 驱动与 PyTorch CUDA YOLO，可运行真实点云、图像、
+后融合和建图；这不包含车辆 CAN、INS 或规划控制部署验收。
+
 最低运行环境：Ubuntu + ROS 2 Humble、PCL、tf2、RViz2、Python `numpy`/`yaml`，以及
 package.xml 声明的依赖。NDT/KISS 路径还需要 PCD 地图、Eigen 与对应定位组件。
 
@@ -35,6 +38,9 @@ git submodule update --init --recursive
 | EKF | `WUTA-FSD/ros2_ws/src/localization/localization_manager/config/ekf.yaml` |
 | NDT/保存地图 | `WUTA-FSD/ros2_ws/src/localization/ndt_localization/config/ndt_localization.yaml` |
 | RViz | `WUTA-SIM/simulator_bringup/rviz/wuta_simulator.rviz` |
+| 实机模型 | `WUTA-FSD/ros2_ws/src/perception/camera_detection/models/best.pt`（本地文件） |
+| 雷达相机外参 | `WUTA-FSD/ros2_ws/src/perception/calibration/camera_lidar.yaml`（本地文件） |
+| 实机 RViz / 驱动配置 | `WUTA-FSD/ros2_ws/src/perception/detection_fusion/config/hardware.rviz`、`zed_hardware.yaml`、`rsm1_hardware.yaml` |
 
 赛道名不是以仓库根目录优先解析：LiDAR 和真值地图/颜色节点统一先查已安装的
 `lidar_sim/tracks/`（构建时由 `perception_simulation/tracks/` 复制），未安装时回退到
@@ -125,6 +131,16 @@ RViz Fixed Frame 设为 `map`。若 `Visible Cones` 报 transform 错误，检�
 ## 后融合部署入口
 
 仿真：`./start_fusion_simulator.sh --rviz`。
-硬件适配：`ros2 launch detection_fusion fusion_mapping.launch.py`；外部提供 LiDAR、YOLOv8 检测框、
-注册深度图、CameraInfo 和定位 TF。该入口默认仅补颜色，完成位置参考/外参/误差模型校准后再开启
-fuse_positions。参见 [后融合部署契约](LATE_FUSION.md)。
+ZED 2i/M1 实机：`./start_simulator.sh --hardware --skip-build --rviz`；首次构建使用
+`./start_hardware_fusion.sh --build-only --lightweight`。默认驱动 overlay 位于
+`/home/wuta/WUTA/zed/install/setup.bash` 和 `/home/wuta/WUTA/rslidar_sdk/install/setup.bash`，
+可用 `ZED_SETUP`、`RSLIDAR_SETUP` 覆盖。YOLO 需安装兼容 ROS Python 的 PyTorch CUDA
+和 ultralytics；PT 后端支持用 `YOLO_PYTHON_PACKAGES` 指定依赖目录。
+RViz 显示真实 `/rslidar_points` 和地图，独立终端显示 YOLO 图像。
+三个脚本在实际启动前清理旧 WUTA launch；仅构建、查看参数或 `--view-only` 不清理。
+直接执行 `ros2 launch` 不包含脚本的启动前清理。
+
+通用外部输入适配入口仍为 `ros2 launch detection_fusion fusion_mapping.launch.py`。
+实机位置融合保持关闭，完成位置参考/外参/误差模型验收后再开启。当前单帧 BLUE 已检出，
+累计地图 UNKNOWN 与相机超时问题尚未闭环，参见 [今日实机记录](HARDWARE_FUSION.md)
+及 [后融合部署契约](LATE_FUSION.md)。

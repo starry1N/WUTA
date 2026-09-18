@@ -7,7 +7,7 @@ build:
   build_only: false
 
 launch_arguments:
-  track_file: track2
+  track_file: track6
   lidar_fov_deg: 360.0
   lidar_max_range: 20.0
   lidar_enable_occlusion: true
@@ -15,7 +15,7 @@ launch_arguments:
   mission_mode: trackdrive
   launch_fsd: true
   use_track_truth_map: false
-  use_simulated_cone_colors: true
+  use_simulated_cone_colors: false
   auto_start: true
   manual_ready: false
   startup_delay: 0.5

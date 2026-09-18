@@ -1,11 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export PATH="/usr/bin:${PATH}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FSD_WS="${ROOT_DIR}/WUTA-FSD/ros2_ws"
 SIM_WS="${ROOT_DIR}/WUTA-SIM"
 FSD_BUILD_SCRIPT="${FSD_WS}/build_ws.sh"
 DEFAULT_CONFIG_FILE="${ROOT_DIR}/config/simulator_defaults.yaml"
+WUTA_PROCESS_ROOT="${ROOT_DIR}"
+source "${ROOT_DIR}/tools/wuta_process_manager.sh"
+
+# Dispatch before loading simulator defaults or starting synthetic sensors.
+SIM_ENTRY_ARGS=()
+USE_HARDWARE=0
+for arg in "$@"; do
+  if [[ "${arg}" == '--hardware' ]]; then
+    USE_HARDWARE=1
+  else
+    SIM_ENTRY_ARGS+=("${arg}")
+  fi
+done
+if (( USE_HARDWARE )); then
+  exec bash "${ROOT_DIR}/start_hardware_fusion.sh" "${SIM_ENTRY_ARGS[@]}"
+fi
 
 CLEAN=0
 SKIP_BUILD=0
@@ -27,6 +44,8 @@ Options:
   --build-only  Build both workspaces without starting ROS nodes.
   --lightweight Limit parallel jobs (for systems with <=8GB RAM).
   --rviz        Start RViz2 with the default simulator visualization config.
+  --no-rviz     Disable RViz2.
+  --hardware    Use real ZED/M1 perception; delegate to start_hardware_fusion.sh.
   --config PATH Load build and launch defaults from a YAML config file.
   --params-file PATH Load node parameters from YAML file after launch.
   -h, --help    Show this help.
@@ -38,6 +57,9 @@ Examples:
   ./start_simulator.sh track_file:=skidpad mission_mode:=skidpad
   ./start_simulator.sh --config config/simulator_defaults.yaml --rviz
   ./start_simulator.sh --clean --build-only
+  ./start_simulator.sh --hardware --skip-build --rviz
+  ./start_simulator.sh --hardware --view-only
+  ./start_simulator.sh --hardware --help
 EOF
 }
 
@@ -185,6 +207,10 @@ while [[ $# -gt 0 ]]; do
       set_launch_arg "launch_rviz:=true"
       shift
       ;;
+    --no-rviz)
+      set_launch_arg "launch_rviz:=false"
+      shift
+      ;;
     --config)
       shift 2
       ;;
@@ -224,6 +250,10 @@ fi
 if [[ ! -f "/opt/ros/${ROS_DISTRO:-humble}/setup.bash" ]]; then
   echo "ROS 2 setup file not found for ROS_DISTRO=${ROS_DISTRO:-humble}." >&2
   exit 1
+fi
+
+if [[ "${BUILD_ONLY}" -eq 0 ]]; then
+  wuta_stop_previous_stack
 fi
 
 if [[ "${SKIP_BUILD}" -eq 0 ]]; then
@@ -301,6 +331,7 @@ cd "${ROOT_DIR}"
 # Launch simulator in background
 ros2 launch simulator_bringup simulator.launch.py "${LAUNCH_ARGS[@]}" &
 LAUNCH_PID=$!
+wuta_register_stack "${LAUNCH_PID}" simulator
 
 # 停止时清理后台进程树。直接 Ctrl+C 只会杀死本脚本（bash 后台作业
 # 忽略 SIGINT），ros2 launch 及节点会残留，必须显式清理。
@@ -310,6 +341,7 @@ cleanup() {
   echo "Stopping simulator and cleaning up background processes..."
   if [[ -n "${LAUNCH_PID:-}" ]]; then
     kill -TERM "${LAUNCH_PID}" 2>/dev/null || true
+    wuta_clear_stack_registration "${LAUNCH_PID}"
   fi
   # 兜底：清理脱离进程组的残留模拟器节点（如 ins_simulator）
   pkill -TERM -f "${SIM_WS}/install" 2>/dev/null || true

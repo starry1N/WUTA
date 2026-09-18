@@ -2,7 +2,7 @@
 
 > 依据：`WUTA-SIM/simulator_bringup/launch/simulator.launch.py`、各包
 > `package.xml`、`CMakeLists.txt`、`setup.py` 与节点源码。本文描述当前源码实现，
-> 不把相机或 CAN 硬件实现当作已运行功能。
+> 实机感知联调状态更新于 2026-09-15；车辆 CAN 仍未实现。
 
 ## 1. System Overview
 
@@ -106,7 +106,8 @@ graph TD
 `autoware_msgs`、`wuta_msgs` 和 `wuta_tools` 是接口/工具包，不提供节点。
 `camera_detection` 提供 `stereo_detection_adapter`（外部 YOLO 框+对齐深度），
 `detection_fusion` 提供 `detection_fusion_node`（投影/三维一对一关联及位置/颜色融合）。
-它们通过独立融合入口启用；真实相机驱动和 YOLO 推理仍预留。
+它们通过独立融合入口启用；`camera_detection` 另提供 `yolov8_node`，支持 PT/PyTorch
+CUDA 与 ONNX 推理。实机入口已接入外部 ZED 2i 和 M1 驱动。
 `simulator_bringup` 的 `simulated_stereo_detections` 在该入口模拟相机观测。
 详细架构、消息与限制见 [后融合说明](LATE_FUSION.md)。`kiss_icp_wrapper` 提供上述可选 sanitizer。
 
@@ -126,6 +127,15 @@ graph TD
 - `ins_simulator`、KISS-ICP 与 EKF 均默认启动，但默认定位解由 INS 输入约束；KISS 输出用于诊断，
   仅在显式启用 sanitizer 后以速度约束参与 EKF。真实 CG-410 驱动仍需替换 INS 子模块。
   `mission_manager` 的 CAN 车检发送仍是 TODO。
+
+独立实机感知入口为 `./start_simulator.sh --hardware --skip-build --rviz`，不启动车辆
+模型、仿真传感器或规划控制。ZED 提供图像、注册深度及定位 TF；M1 发布真实
+`/rslidar_points`。数据流为 GPU YOLO → 双目适配 → 雷达/相机后融合 → 锥桶地图。
+融合还订阅同帧原始点云，为未匹配相机框进行点云裁剪、深度分层和局部聚类；默认过滤
+未匹配雷达目标。RViz 只显示点云和地图，叠框图像在独立窗口显示。
+三个根目录启动入口均会在实际启动前停止旧 WUTA launch 及子进程。
+现场已观察到 BLUE 单帧输出，但累计地图 UNKNOWN 的确认问题仍待解决，详见
+[今日实机开发与验收记录](HARDWARE_FUSION.md)。
 
 ## 5. Software Stack
 

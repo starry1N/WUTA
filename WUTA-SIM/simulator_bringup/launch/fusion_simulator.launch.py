@@ -14,6 +14,8 @@ def generate_launch_description():
         DeclareLaunchArgument('track_file', default_value='trackdrive'),
         DeclareLaunchArgument('mission_mode', default_value='trackdrive'),
         DeclareLaunchArgument('launch_rviz', default_value='true'),
+        DeclareLaunchArgument('rviz_config', default_value=PathJoinSubstitution([
+            share, 'rviz', 'fusion_simulator.rviz'])),
         DeclareLaunchArgument('simulate_camera', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('use_ground_truth_localization', default_value='false'),
         IncludeLaunchDescription(
@@ -22,7 +24,7 @@ def generate_launch_description():
                 'track_file': LaunchConfiguration('track_file'),
                 'mission_mode': LaunchConfiguration('mission_mode'),
                 'launch_rviz': LaunchConfiguration('launch_rviz'),
-                'rviz_config': PathJoinSubstitution([share, 'rviz', 'fusion_simulator.rviz']),
+                'rviz_config': LaunchConfiguration('rviz_config'),
                 'use_detection_fusion': 'true', 'use_track_truth_map': 'false',
                 'use_simulated_cone_colors': 'false', 'launch_fsd': 'true',
                 'use_ground_truth_localization': LaunchConfiguration('use_ground_truth_localization'),

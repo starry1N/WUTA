@@ -1,8 +1,9 @@
 # 工控机交接：双目 YOLOv8 / LiDAR 后融合
 
-本文面向在工控机继续开发的 agent。交接基线为顶层仓库 `4450f66`
-（`main`）和 FSD 子模块 `b754e5e`（`小登测试`）。先确认这两个提交，避免把
-未提交的本地配置或赛道草稿混入调试结论。
+本文面向在工控机继续开发的 agent，更新于 2026-09-15。最初交接基线为顶层仓库
+`4450f66`（`main`）和 FSD 子模块 `b754e5e`（`小登测试`）；今天的实机开发仍存在
+未提交本地修改，重新 clone 不会自动获得。接手前检查顶层和子模块 `git status`，
+当前完成项与现场数据以 [HARDWARE_FUSION.md](HARDWARE_FUSION.md) 为准。
 
 ## 获取与构建
 
@@ -36,7 +37,22 @@ FSD 使用 `小登测试` 分支；嵌套的 KISS-ICP 和 robot_localization 必
 `/mapping/cone_map_viz` 的融合建图结果。这里的“相机”是
 `simulated_stereo_detections`，它仅用 YAML/真值生成检测级观测，不能代表 YOLO 或双目实机性能。
 
-工控机接入真实硬件的最小入口：
+当前工控机真实 ZED 2i/M1 入口：
+
+```bash
+./start_simulator.sh --hardware --skip-build --rviz
+# 只查看正在运行的系统，不重启驱动
+./start_simulator.sh --hardware --view-only
+```
+
+权重位于 `WUTA-FSD/ros2_ws/src/perception/camera_detection/models/best.pt`，外参位于
+`WUTA-FSD/ros2_ws/src/perception/calibration/camera_lidar.yaml`。默认 PyTorch CUDA，
+red 代表橙色锥桶。真实点云 `/rslidar_points` 与 ZED 注册图像/深度进入融合，ZED pose/TF
+支持独立设备建图；RViz 仅显示点云和地图，独立终端显示 YOLO 叠框图像。
+三个启动脚本实际启动前会停止旧 WUTA launch 及子进程；仅构建、查看参数和
+`--view-only` 不清理。直接 `ros2 launch` 没有这项脚本清理。
+
+通用外部设备适配入口仍保留：
 
 ```bash
 ros2 launch detection_fusion fusion_mapping.launch.py
@@ -61,12 +77,16 @@ ros2 launch detection_fusion fusion_mapping.launch.py
 投影/空间门控、歧义拒绝、Hungarian 一对一关联、颜色传递、保守 XY 位置融合，以及输入现有
 ConeMapBuilder 的接线。建图在融合模式禁用车辆左右侧猜色，并要求三次颜色支持。
 
-未完成：真实相机驱动、YOLOv8 推理节点、原始左右图匹配、硬件时间同步与外参标定、
-锥筒底面统一参考点标定、协方差地图滤波、端到端 ROS 联调、实机精度与故障注入验收。
+今天另已完成外部 ZED/M1 驱动接线、GPU PT YOLO、已有外参静态 TF、叠框图像、
+RANSAC 地面法向约束和框引导真实点云裁剪/深度分层聚类。默认仅发布相机匹配目标。
+未完成：运动时硬件同步/扫描去畸变、外参精度验收、锥筒统一参考点标定、协方差地图
+滤波、全类别多锥场景与故障注入验收。原始左右图匹配由 ZED SDK 提供。
 硬件入口默认 `fuse_positions=false`；完成共同位置参考和误差模型验证前，不要开启它。
 
-此前仅运行过 10 项纯算法 pytest；完整 ROS 构建曾在实现中止前被停止，端到端仿真和硬件
-验证均尚未完成。不要将代码存在或单元测试通过视为系统通过。
+相关感知/建图包已构建并完成实机 ROS 联调。最新 20 秒采样有 16 个匹配与框引导目标、
+15 个着色目标，但 128 帧融合周期中 111 帧 camera_timeout，地图仍有 2 个 UNKNOWN。
+已观察到单帧 BLUE，累计地图颜色确认尚未闭环；优先检查有效检测吞吐、时间关联和
+同一轨迹颜色票数，不应把单帧蓝框视为完整地图验收。
 
 ## 首次验证顺序
 
@@ -80,11 +100,13 @@ ConeMapBuilder 的接线。建图在融合模式禁用车辆左右侧猜色，�
 6. 实机先保持 `fuse_positions=false`，记录 rosbag 后计算颜色错配、漏检、重复地标和时序误差，
    再决定是否调门限或开启位置融合。
 
-建议记录：`/hesai/pandar`、`/perception/lidar/cones_raw`、
+建议记录：仿真 `/hesai/pandar` 或实机 `/rslidar_points`、`/perception/lidar/cones_raw`、
 `/perception/camera/cones`、`/perception/camera/camera_info`、
 `/perception/fused/cones`、`/perception/fusion/status`、`/mapping/cone_map`、
 `/tf`、`/tf_static`、`/localization/pose`。完整参数、消息字段、关联公式和退化规则见
 [LATE_FUSION.md](LATE_FUSION.md)。
+实机另记录 `/camera/yolo/cones`、`/perception/camera/yolo/status`、ZED 图像/深度/
+CameraInfo 和 `/zed/zed_node/pose`；用于诊断原始曝光、推理时延和建图位姿。
 
 ## 本地未上传内容
 

@@ -64,3 +64,4 @@ wuta_gui/__pycache__/
 # Third-party
 Ipopt-3.12.7/
 HRT-D/
+.hardware_deps/

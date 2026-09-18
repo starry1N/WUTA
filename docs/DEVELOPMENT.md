@@ -118,8 +118,8 @@ INS 包位于 `WUTA-SIM/wuta-ins-simulator`，并已是 `simulator_bringup` 的�
 - `lidar_show_track_labels:=false` 默认关闭完整赛道 531 个锥桶的 ID/type 文字，仅保留锥桶
   marker；需要静态赛道标注时可显式开启。
 - `use_simulated_cone_colors` 仅用于仿真建图验收，真实系统应由 camera/fusion 链路替代。
-- 2026-08-01 的默认 RViz、多地图与双颜色模式运行结果见
-  [`TRACKDRIVE_RUNTIME_VALIDATION_2026-08-01.md`](TRACKDRIVE_RUNTIME_VALIDATION_2026-08-01.md)。
+- 当前实机 RViz、颜色融合与地图验收结果见
+  [HARDWARE_FUSION.md](HARDWARE_FUSION.md)。
 - RViz 默认关闭 `/hesai/pandar` 原始点云和 `/perception/lidar/cones_viz`
   未知色检测层。二者是白色调试层；检查颜色时优先看
   `/sim/lidar/track_cones` 与 `/mapping/cone_map_viz`。
@@ -169,6 +169,14 @@ INS 包位于 `WUTA-SIM/wuta-ins-simulator`，并已是 `simulator_bringup` 的�
 ## 后融合开发
 
 独立入口：`./start_fusion_simulator.sh --rviz`，可用 `--skip-build`、`--lightweight`。
+普通仿真、后融合仿真和实机融合在实际启动前共用进程清理逻辑；仅查看、仅构建和查看
+launch 参数时不会终止已有系统。
 新消息需先构建 wuta_msgs，再构建 camera_detection、detection_fusion、cone_map_builder 及 simulator_bringup。
 算法测试分别在 camera_detection 和 detection_fusion 包内运行 `PYTHONPATH=. python3 -m pytest test -q`。
-真实相机和 YOLO 权重未提供；不要将模拟检测当作模型性能测试。见 [接口与验证说明](LATE_FUSION.md)。
+实机已提供 ZED 2i、M1、外参与 PT 权重，默认使用 PyTorch CUDA；真实设备入口为
+`./start_simulator.sh --hardware --skip-build --rviz`。权重放在
+`WUTA-FSD/ros2_ws/src/perception/camera_detection/models/best.pt`，外参放在
+`WUTA-FSD/ros2_ws/src/perception/calibration/camera_lidar.yaml`，均不提交。
+实机新增框引导原始点云聚类，并默认过滤未匹配雷达目标。模拟检测仍不能用于评价模型
+性能。接口见 [LATE_FUSION.md](LATE_FUSION.md)，今日完成项、现场复测和未解决问题见
+[HARDWARE_FUSION.md](HARDWARE_FUSION.md)。

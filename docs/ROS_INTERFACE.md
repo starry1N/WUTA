@@ -147,8 +147,8 @@ KISS-ICP 的 `lidar_odom_frame=odom`、`base_frame=base_link`，且
 | lidar_simulator | topic/frame 名（string）、`publish_rate_hz`/FOV/范围/噪声（double）、点数（int）、开关（bool） | `config/lidar_simulator.yaml` |
 | simulation_bridge | `ground_truth_topic`、`map_frame`、`base_frame`、`mission_mode_cmd`（string）；`publish_start_command`、`publish_truth_localization`、`manual_ready`（bool）；`timing_min_lap_duration`（double）、`trackdrive_finish_laps`（int） | 提供仿真就绪/GO/急停/车检输入、真值计时、延迟、真值定位调试和状态显示；订阅正式圈次用于对照，Trackdrive 完成权属于 mission_manager |
 | track_truth_map_publisher | `track_file`、`map_topic`、`visualization_topic`、`map_frame`（string）；`mapping_laps`（int）、`publish_rate_hz`（double） | 将 YAML 锥桶坐标/颜色转换为 ConeMap，模拟相机提供正确颜色；达到正式建图圈数后闭环，不发布 YAML 中心线 |
-| simulated_cone_colorizer | `track_file`、`input_topic`、`output_topic`、`ground_truth_topic`（string）；`max_match_distance`、`max_pose_age_sec`、`lidar_offset_x/y`（double）；`pose_history_size`（int） | 仅原有模拟颜色模式启动；与检测级后融合路径互斥。后融合节点已实现，真实相机/YOLO 驱动待接入 |
-| lidar_detection_node | `detector_type`、topic 名、地面/体素/聚类/几何阈值、`model_path` | `config/lidar_detection.yaml` |
+| simulated_cone_colorizer | `track_file`、`input_topic`、`output_topic`、`ground_truth_topic`（string）；`max_match_distance`、`max_pose_age_sec`、`lidar_offset_x/y`（double）；`pose_history_size`（int） | 仅原有模拟颜色模式启动；与检测级后融合路径互斥。实机改用 ZED/YOLO 后融合 |
+| lidar_detection_node | `detector_type`、topic 名、地面/体素/聚类/几何阈值（含 `ground_max_tilt_deg`）、`model_path` | `config/lidar_detection.yaml`；RANSAC 地面法向约束到雷达 Z 轴，避免室内墙面被当作地面 |
 | cone_map_builder | `merge_distance`、`consolidation_distance`、`min_hit_count`、`mapping_laps`、几何闭环阈值、`assign_colors`、`map_save_path`、`tf_lookup_timeout_sec`、`pending_detection_timeout_sec`、`max_pending_detections`、`localization_jump_threshold`、`localization_jump_cooldown_sec`、`use_latest_tf_fallback` | `config/cone_map_builder.yaml`；每帧以最近兼容轨迹关联，并记录同帧共视的真实近邻；定位跳变时清空待处理检测并暂停融合；在线去重只合并从未共视的轨迹，正式圈次闭图且保留几何兜底；默认只使用检测采样时刻 TF，缺失时排队重试 |
 | boundary_detector_node | 局部 lookahead/配对/Delaunay 参数；全局宽度、去重、几何邻域/切向一致性、最大段长/闭合距离、最小点数/覆盖率 | 只根据 ConeMap 与定位生成中心线；闭环后优先按颜色配对，失败时使用局部切向筛选横跨赛道锥桶对，再以同一质量门槛验收并冻结；不读取 YAML 中心线 |
 | path_generator_node | Trackdrive 第一圈/第二圈/第三圈速度、曲率、全局前视段、短路径、可见距离、置信度与定位超时参数；其他赛项参数 | 第一圈 7 m/s 上限，RACE 两圈 9/10 m/s；冻结环线切片后取曲率、可见距离、路径/定位置信度的最低速度上限 |
@@ -166,9 +166,11 @@ KISS-ICP 的 `lidar_odom_frame=odom`、`base_frame=base_link`，且
 
 | Topic | Type | Publisher → Subscriber |
 | --- | --- | --- |
-| `/camera/yolo/cones` | `wuta_msgs/msg/CameraConeDetectionArray` | 外部 YOLOv8 适配发布器（预留）→ stereo_detection_adapter |
-| `/camera/left/depth_registered` | `sensor_msgs/msg/Image` | 外部双目驱动（预留）→ stereo_detection_adapter |
-| `/camera/left/camera_info` | `sensor_msgs/msg/CameraInfo` | 外部标定发布器（预留）→ stereo_detection_adapter |
+| `/camera/yolo/cones` | `wuta_msgs/msg/CameraConeDetectionArray` | 实机 yolov8_node（PT/ONNX）或外部 YOLOv8 适配发布器 → stereo_detection_adapter |
+| `/camera/yolo/image_annotated` | `sensor_msgs/msg/Image` | yolov8_node → rqt_image_view；原分辨率 bgr8，叠加框、颜色类别与置信度，保留对应曝光 stamp/frame；Best Effort/Volatile depth 5 |
+| `/perception/camera/yolo/status` | `std_msgs/msg/String` | yolov8_node → 调试工具；JSON 检测数、推理耗时、曝光 stamp_ns、device、backend（pytorch/onnxruntime）与 providers；Reliable/Volatile depth 10 |
+| `/camera/left/depth_registered` | `sensor_msgs/msg/Image` | 通用外部双目驱动 → stereo_detection_adapter；ZED 实机覆盖为下表话题 |
+| `/camera/left/camera_info` | `sensor_msgs/msg/CameraInfo` | 通用外部标定发布器 → stereo_detection_adapter；ZED 实机覆盖为下表话题 |
 | `/perception/camera/cones` | `wuta_msgs/msg/CameraConeDetectionArray` | stereo_detection_adapter 或 simulated_stereo_detections → detection_fusion_node |
 | `/perception/camera/camera_info` | `sensor_msgs/msg/CameraInfo` | stereo_detection_adapter 或 simulated_stereo_detections → detection_fusion_node |
 | `/perception/fused/cones` | `wuta_msgs/msg/ConeArray` | detection_fusion_node → cone_map_builder（订阅 remap） |
@@ -185,3 +187,42 @@ KISS-ICP 的 `lidar_odom_frame=odom`、`base_frame=base_link`，且
 模拟专用静态帧 `sim_camera_left_optical_frame` 由 fusion_simulator.launch.py 挂到 base_link，
 坐标轴右/下/前，安装高度 0.5 m。物理 TF 必须采用实际标定，融合不发布车辆定位 TF。
 没有新增 Service/Action。
+
+实机 YOLO 默认图像输入为 `/zed/zed_node/rgb/image_rect_color`，适配器读取
+`/zed/zed_node/depth/depth_registered` 与 `/zed/zed_node/rgb/camera_info`。
+
+| 实机 Topic | Type | Publisher → Subscriber / frame |
+| --- | --- | --- |
+| `/rslidar_points` | `sensor_msgs/msg/PointCloud2` | M1 rslidar_sdk_node → lidar_detection、detection_fusion、RViz；rslidar，SensorDataQoS |
+| `/zed/zed_node/rgb/image_rect_color` | `sensor_msgs/msg/Image` | ZED → yolov8_node；zed_left_camera_optical_frame，1280x720 BGRA 实测 |
+| `/zed/zed_node/depth/depth_registered` | `sensor_msgs/msg/Image` | ZED → stereo_detection_adapter；左目光学帧，1280x720 32FC1 米制实测 |
+| `/zed/zed_node/rgb/camera_info` | `sensor_msgs/msg/CameraInfo` | ZED → stereo_detection_adapter；对应注册图像的 P 矩阵 |
+| `/zed/zed_node/pose` | `geometry_msgs/msg/PoseStamped` | ZED → cone_map_builder 位姿订阅 remap；map 帧 |
+
+YOLO 参数 `annotated_topic`（string，默认 `/camera/yolo/image_annotated`）与
+`publish_annotated_image`（bool，默认 true）控制可视化；仅存在订阅者时绘制并发布，
+无检测时仍发布对应原图，显示频率为推理频率。
+实机原始点云为 `/rslidar_points`（PointCloud2，frame=rslidar，驱动打主机时间）。
+外参静态 TF 为 `zed_left_camera_optical_frame -> rslidar`，按
+`p_camera = R p_lidar + t` 发布；本实机入口由 ZED 提供 `map -> odom -> zed_camera_link`
+及相机自身静态 TF，不提供车辆 `base_link` 标定，也不启动车辆控制。
+实机 launch 将 builder 的 `/localization/pose` 订阅 remap 到
+`localization_pose_topic`（默认 `/zed/zed_node/pose`，PoseStamped，map 帧），
+以 ZED 相机位姿支持独立设备建图；接入车辆 INS/EKF 时需改回相应车辆位姿话题
+并禁用重复的 ZED 定位 TF 发布。
+`fusion_hardware.launch.py` 支持 `launch_rviz`、`rviz_config`、`start_drivers`、
+`model_path`、`calibration_path`、`red_color`、`image_topic`、`lidar_topic`、
+`depth_topic`、`info_topic`、`localization_pose_topic`、`confidence_threshold`、
+`inference_threads`、`fusion_wait_sec`、`publish_annotated_image`、
+`publish_unmatched_lidar`。实机默认关闭 `publish_unmatched_lidar`：只有与相机检测框
+一对一关联成功的雷达聚类才进入 `/perception/fused/cones` 和锥桶地图。
+实机默认启用 `guided_clustering`：对未匹配检测框使用同帧原始点云和有效注册深度
+做框内深度分层与局部三维聚类，仍要求存在满足几何门限的真实雷达点簇。
+新增 `device`（cuda/cpu，默认 cuda）和 `gpu_device_id`（非负 int，默认 0）；
+PT 后端检查 PyTorch CUDA，ONNX 后端检查 CUDAExecutionProvider；GPU 不可用时明确报错，
+不自动改为 CPU 推理。默认模型 best.pt，类别 red/yellow/blue 映射至 ORANGE/YELLOW/BLUE。
+实机 `fusion_wait_sec` 默认 1.2 秒以等待 GPU 推理，曝光匹配容差仍为 60 ms，
+位置融合保持关闭；增加等待不等于放宽硬件同步精度。
+`/perception/fusion/status` JSON 包含 `guided_clusters`、`published_cones` 和
+`unmatched_filtered` 等计数。实机颜色概率门限为 0.6，地图累计至少三次颜色支持且
+领先颜色占有效颜色票数至少 70% 才确认；蓝色图像框不等同于蓝色地图地标。

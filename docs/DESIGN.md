@@ -53,7 +53,12 @@ FSD 建图链路。
 `ConeMapBuilder`。builder 在该模式下关闭左右位置颜色启发式，但仍独立负责坐标估计、
 命中融合、去重和闭环；因此该模式可评价建图几何，不等同于 `use_track_truth_map` 的
 完整 ConeMap 快捷输入。独立后融合模式已实现 stereo_detection_adapter 和 detection_fusion_node，
-输出 `/perception/fused/cones` 接入现有建图；相机驱动/YOLO 推理仍预留。
+输出 `/perception/fused/cones` 接入现有建图。实机已接入 ZED 2i/M1 外部驱动，
+`yolov8_node` 默认使用 `best.pt` 和 PyTorch CUDA，red/yellow/blue 映射为橙/黄/蓝。
+实机地面 RANSAC 法向限制为雷达 Z 轴 5° 内；未匹配相机框可从同帧原始点云裁剪并按
+注册深度 ±0.4 m 分层，以 0.05 m 体素和 0.15 m 连通距离补充几何合格的真实点簇。
+实机仅发布匹配框的目标，颜色概率门限 0.6；地图至少累计三次颜色支持且占有效颜色票
+70% 才确认颜色，不要求三次连续。位置融合在实机保持关闭。
 详见 [后融合设计与入口](LATE_FUSION.md)，包含时间补偿、关联与颜色确认以及实现限制。
 
 ### 2.3 规划与控制
