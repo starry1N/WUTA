@@ -22,12 +22,13 @@ usage() {
     echo '  --build-only            Build perception packages without launching'
     echo '  --lightweight           Build C++ packages with one compiler job'
     echo '  --no-drivers            Use external camera/LiDAR drivers; start perception nodes'
-    echo '  --model PATH            Override PT or ONNX weights (default best.pt)'
+    echo '  --model PATH            Override PT, ONNX, or engine weights (default best-new.engine)'
     echo '  --calibration PATH      Override camera-from-LiDAR YAML'
     echo '  --rviz-config PATH      Override live RViz configuration'
     echo '  --show-args             Print all ROS launch arguments without launching'
     echo 'ROS args: image_topic:=... lidar_topic:=... depth_topic:=... info_topic:=...'
     echo '  confidence_threshold:=0.5 inference_threads:=4 fusion_wait_sec:=1.2'
+    echo '  model_input_width:=1280 model_input_height:=760 (best-new.engine defaults)'
     echo '  publish_annotated_image:=true red_color:=3 (red -> ORANGE)'
     echo '  device:=cuda gpu_device_id:=0 (CPU requires explicit device:=cpu)'
 }
@@ -39,8 +40,9 @@ SHOW_ARGS=0
 OPEN_IMAGE_VIEW=-1
 IMAGE_VIEW_TOPIC=/camera/yolo/image_annotated
 LIVE_RVIZ_CONFIG="${FSD_WS}/src/perception/detection_fusion/config/hardware.rviz"
-LAUNCH_ARGS=("model_path:=${FSD_WS}/src/perception/camera_detection/models/best.pt"
-    "calibration_path:=${FSD_WS}/src/perception/calibration/camera_lidar.yaml")
+LAUNCH_ARGS=("model_path:=${FSD_WS}/src/perception/camera_detection/models/best-new.engine"
+    "calibration_path:=${FSD_WS}/src/perception/calibration/camera_lidar.yaml"
+    "model_input_width:=1280" "model_input_height:=760")
 set_launch_arg() {
     local name="${1%%:=*}" index
     for index in "${!LAUNCH_ARGS[@]}"; do

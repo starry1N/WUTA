@@ -40,7 +40,9 @@ def main():
     parser.add_argument('--capture-only', action='store_true', help='Save the source image before testing GPU')
     parser.add_argument('--device', choices=['cuda', 'cpu'], default='cuda')
     parser.add_argument('--output', default=str(root / 'logs/yolo_gpu/live.png'))
-    parser.add_argument('--model', default=str(root / 'WUTA-FSD/ros2_ws/src/perception/camera_detection/models/best.pt'))
+    parser.add_argument('--model', default=str(root / 'WUTA-FSD/ros2_ws/src/perception/camera_detection/models/best-new.engine'))
+    parser.add_argument('--input-width', type=int, default=1280)
+    parser.add_argument('--input-height', type=int, default=760)
     args = parser.parse_args()
     image = cv2.imread(args.image) if args.image else capture(args.topic)
     if image is None:
@@ -52,15 +54,19 @@ def main():
             raise RuntimeError('Failed to save source image')
         print(str(output_path))
         return
+    if min(args.input_width, args.input_height) < 0 or ((args.input_width == 0) != (args.input_height == 0)):
+        raise ValueError('--input-width and --input-height must both be zero or positive')
+    input_size = (args.input_height, args.input_width) if args.input_height else None
     model = YoloModel(args.model, red_color=3, device=args.device,
-                      profile_prefix=output_path.parent / ('ort_' + args.device))
+                      profile_prefix=output_path.parent / ('ort_' + args.device),
+                      input_size=input_size)
     model.predict(image)  # Warm up CUDA kernels and allocations.
     durations = []
     for _ in range(10):
         started = time.monotonic()
         predictions = model.predict(image)
         durations.append((time.monotonic() - started) * 1000)
-    if model.backend == 'pytorch':
+    if model.backend in ('pytorch', 'tensorrt'):
         raw, _, _ = model.raw_output(image)
     else:
         tensor, _, _ = letterbox(image, model.size)
@@ -81,7 +87,8 @@ def main():
         if event.get('cat') == 'Node' and event.get('args', {}).get('provider'))
     if model.backend == 'onnxruntime' and args.device == 'cuda' and not kernel_providers['CUDAExecutionProvider']:
         raise RuntimeError('Profile contains no CUDA kernel events')
-    print(json.dumps(dict(device=args.device, backend=model.backend, providers=model.providers, median_ms=median,
+    print(json.dumps(dict(device=args.device, backend=model.backend, providers=model.providers,
+        input_size=list(model.size), median_ms=median,
         min_ms=min(durations), max_ms=max(durations), detections=len(predictions),
         max_class_scores=dict(zip(model.names.values(), best_scores)),
         kernel_events=dict(kernel_providers),

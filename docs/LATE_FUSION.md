@@ -41,7 +41,7 @@ flowchart TD
   M --> R
 ```
 
-实机入口已接入 ZED 2i/M1 外部驱动、PT/ONNX YOLO 推理和已有雷达相机外参，
+实机入口已接入 ZED 2i/M1 外部驱动、PT/ONNX/TensorRT YOLO 推理和已有雷达相机外参，
 ZED SDK 提供注册深度；硬件同步和标定精度仍需验收。融合检测不是 EKF 的新定位输入；
 现有 INS/EKF 提供运动补偿和建图 TF，锥筒地图仍由 cone_map_builder 生成。
 

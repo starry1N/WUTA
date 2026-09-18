@@ -54,7 +54,8 @@ FSD 建图链路。
 命中融合、去重和闭环；因此该模式可评价建图几何，不等同于 `use_track_truth_map` 的
 完整 ConeMap 快捷输入。独立后融合模式已实现 stereo_detection_adapter 和 detection_fusion_node，
 输出 `/perception/fused/cones` 接入现有建图。实机已接入 ZED 2i/M1 外部驱动，
-`yolov8_node` 默认使用 `best.pt` 和 PyTorch CUDA，red/yellow/blue 映射为橙/黄/蓝。
+`yolov8_node` 默认使用 `best-new.engine` 和 TensorRT FP16，以 1280x768 张量推理，
+red/yellow/blue 映射为橙/黄/蓝。
 实机地面 RANSAC 法向限制为雷达 Z 轴 5° 内；未匹配相机框可从同帧原始点云裁剪并按
 注册深度 ±0.4 m 分层，以 0.05 m 体素和 0.15 m 连通距离补充几何合格的真实点簇。
 实机仅发布匹配框的目标，颜色概率门限 0.6；地图至少累计三次颜色支持且占有效颜色票

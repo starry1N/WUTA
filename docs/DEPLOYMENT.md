@@ -7,7 +7,7 @@
 这些驱动不在当前源码中。不要把 simulator 的 `/sim/ground_truth` 或
 `simulation_bridge` 当作实车定位源。
 
-工控机独立感知已接入外部 ZED 2i/M1 驱动与 PyTorch CUDA YOLO，可运行真实点云、图像、
+工控机独立感知已接入外部 ZED 2i/M1 驱动与 TensorRT FP16 YOLO，可运行真实点云、图像、
 后融合和建图；这不包含车辆 CAN、INS 或规划控制部署验收。
 
 最低运行环境：Ubuntu + ROS 2 Humble、PCL、tf2、RViz2、Python `numpy`/`yaml`，以及
@@ -38,7 +38,7 @@ git submodule update --init --recursive
 | EKF | `WUTA-FSD/ros2_ws/src/localization/localization_manager/config/ekf.yaml` |
 | NDT/保存地图 | `WUTA-FSD/ros2_ws/src/localization/ndt_localization/config/ndt_localization.yaml` |
 | RViz | `WUTA-SIM/simulator_bringup/rviz/wuta_simulator.rviz` |
-| 实机模型 | `WUTA-FSD/ros2_ws/src/perception/camera_detection/models/best.pt`（本地文件） |
+| 实机模型 | `WUTA-FSD/ros2_ws/src/perception/camera_detection/models/best-new.engine`（本地文件） |
 | 雷达相机外参 | `WUTA-FSD/ros2_ws/src/perception/calibration/camera_lidar.yaml`（本地文件） |
 | 实机 RViz / 驱动配置 | `WUTA-FSD/ros2_ws/src/perception/detection_fusion/config/hardware.rviz`、`zed_hardware.yaml`、`rsm1_hardware.yaml` |
 

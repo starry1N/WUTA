@@ -1,5 +1,11 @@
 # 工控机实机感知与可视化
 
+当前默认加载 `best-new.engine`（TensorRT 10.9 FP16，固定 1280x768，batch 1）。
+使用已有两锥桶图和 GTX 1660 SUPER 测得纯 engine 中位约 25.8 ms；通过 WUTA
+相机后端执行的完整检测调用中位约 32.6 ms（含预处理、传输与 NMS）。
+首次部署请先运行 `./start_hardware_fusion.sh --build-only --lightweight`，
+再启动实机；若 engine 缺失，运行 `./tools/build_yolo_tensorrt.sh`。
+
 从仓库根目录启动：
 
 ```bash
@@ -31,7 +37,8 @@ M1 UDP 6699/7788 端口；若端口仍由 WUTA launch 之外的进程占用，�
 
 ```bash
 ./start_hardware_fusion.sh --skip-build --rviz \
-  --model WUTA-FSD/ros2_ws/src/perception/camera_detection/models/best.pt \
+  --model WUTA-FSD/ros2_ws/src/perception/camera_detection/models/best-new.engine \
+  model_input_width:=1280 model_input_height:=760 \
   --calibration WUTA-FSD/ros2_ws/src/perception/calibration/camera_lidar.yaml \
   confidence_threshold:=0.25 inference_threads:=4 fusion_wait_sec:=1.2 \
   publish_annotated_image:=true publish_unmatched_lidar:=false red_color:=3
@@ -73,8 +80,9 @@ RViz 仅保留上述点云与锥桶地图两项；YOLO 图像通过独立 rqt_im
 - 实机入口已接通 ZED 2i、RoboSense M1、相机检测、雷达检测、后融合、
   cone_map_builder 和 RViz。当前运行图中 M1 点云只有一个发布者，算法输入为
   `/rslidar_points` 的真实点云，不再使用仿真点云。
-- 默认权重切换为 `camera_detection/models/best.pt`。YOLO 使用原生 PyTorch CUDA，
-  运行状态为 `pytorch` / `PyTorch:cuda:0`；仍可显式传入 ONNX 权重。模型类别
+- 默认模型切换为 `camera_detection/models/best-new.engine`，1280x760 训练输入按 stride
+  补齐为 1280x768。YOLO 使用 TensorRT 10.9 FP16，运行状态为 `tensorrt`；
+  仍可显式传入 PT 或 ONNX 权重。模型类别
   `red/yellow/blue` 映射为橙/黄/蓝，其中 `red` 按项目数据语义映射为橙色锥桶。
 - YOLO 输出保留 ZED 曝光 header 和 1280x720 原图坐标，叠框图像发布到
   `/camera/yolo/image_annotated`。启动 RViz 时默认另开 rqt_image_view 窗口显示图像。

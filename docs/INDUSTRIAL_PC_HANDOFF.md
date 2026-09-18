@@ -45,8 +45,8 @@ FSD 使用 `小登测试` 分支；嵌套的 KISS-ICP 和 robot_localization 必
 ./start_simulator.sh --hardware --view-only
 ```
 
-权重位于 `WUTA-FSD/ros2_ws/src/perception/camera_detection/models/best.pt`，外参位于
-`WUTA-FSD/ros2_ws/src/perception/calibration/camera_lidar.yaml`。默认 PyTorch CUDA，
+权重位于 `WUTA-FSD/ros2_ws/src/perception/camera_detection/models/best-new.engine`，外参位于
+`WUTA-FSD/ros2_ws/src/perception/calibration/camera_lidar.yaml`。默认 TensorRT FP16，
 red 代表橙色锥桶。真实点云 `/rslidar_points` 与 ZED 注册图像/深度进入融合，ZED pose/TF
 支持独立设备建图；RViz 仅显示点云和地图，独立终端显示 YOLO 叠框图像。
 三个启动脚本实际启动前会停止旧 WUTA launch 及子进程；仅构建、查看参数和

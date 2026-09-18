@@ -166,9 +166,9 @@ KISS-ICP 的 `lidar_odom_frame=odom`、`base_frame=base_link`，且
 
 | Topic | Type | Publisher → Subscriber |
 | --- | --- | --- |
-| `/camera/yolo/cones` | `wuta_msgs/msg/CameraConeDetectionArray` | 实机 yolov8_node（PT/ONNX）或外部 YOLOv8 适配发布器 → stereo_detection_adapter |
+| `/camera/yolo/cones` | `wuta_msgs/msg/CameraConeDetectionArray` | 实机 yolov8_node（PT/ONNX/TensorRT）或外部 YOLOv8 适配发布器 → stereo_detection_adapter |
 | `/camera/yolo/image_annotated` | `sensor_msgs/msg/Image` | yolov8_node → rqt_image_view；原分辨率 bgr8，叠加框、颜色类别与置信度，保留对应曝光 stamp/frame；Best Effort/Volatile depth 5 |
-| `/perception/camera/yolo/status` | `std_msgs/msg/String` | yolov8_node → 调试工具；JSON 检测数、推理耗时、曝光 stamp_ns、device、backend（pytorch/onnxruntime）与 providers；Reliable/Volatile depth 10 |
+| `/perception/camera/yolo/status` | `std_msgs/msg/String` | yolov8_node → 调试工具；JSON 检测数、推理耗时、曝光 stamp_ns、device、backend（pytorch/onnxruntime/tensorrt）与 providers；Reliable/Volatile depth 10 |
 | `/camera/left/depth_registered` | `sensor_msgs/msg/Image` | 通用外部双目驱动 → stereo_detection_adapter；ZED 实机覆盖为下表话题 |
 | `/camera/left/camera_info` | `sensor_msgs/msg/CameraInfo` | 通用外部标定发布器 → stereo_detection_adapter；ZED 实机覆盖为下表话题 |
 | `/perception/camera/cones` | `wuta_msgs/msg/CameraConeDetectionArray` | stereo_detection_adapter 或 simulated_stereo_detections → detection_fusion_node |
@@ -213,14 +213,17 @@ YOLO 参数 `annotated_topic`（string，默认 `/camera/yolo/image_annotated`�
 `fusion_hardware.launch.py` 支持 `launch_rviz`、`rviz_config`、`start_drivers`、
 `model_path`、`calibration_path`、`red_color`、`image_topic`、`lidar_topic`、
 `depth_topic`、`info_topic`、`localization_pose_topic`、`confidence_threshold`、
-`inference_threads`、`fusion_wait_sec`、`publish_annotated_image`、
+`inference_threads`、`model_input_width`、`model_input_height`、
+`fusion_wait_sec`、`publish_annotated_image`、
 `publish_unmatched_lidar`。实机默认关闭 `publish_unmatched_lidar`：只有与相机检测框
 一对一关联成功的雷达聚类才进入 `/perception/fused/cones` 和锥桶地图。
 实机默认启用 `guided_clustering`：对未匹配检测框使用同帧原始点云和有效注册深度
 做框内深度分层与局部三维聚类，仍要求存在满足几何门限的真实雷达点簇。
 新增 `device`（cuda/cpu，默认 cuda）和 `gpu_device_id`（非负 int，默认 0）；
-PT 后端检查 PyTorch CUDA，ONNX 后端检查 CUDAExecutionProvider；GPU 不可用时明确报错，
-不自动改为 CPU 推理。默认模型 best.pt，类别 red/yellow/blue 映射至 ORANGE/YELLOW/BLUE。
+PT 后端检查 PyTorch CUDA，ONNX 后端检查 CUDAExecutionProvider，TensorRT 后端检查
+CUDA 和 engine 固定输入；GPU 不可用时明确报错，不自动改为 CPU 推理。默认模型
+best-new.engine，输入按训练配置从 1280x760 补齐到
+1280x768，类别 red/yellow/blue 映射至 ORANGE/YELLOW/BLUE。
 实机 `fusion_wait_sec` 默认 1.2 秒以等待 GPU 推理，曝光匹配容差仍为 60 ms，
 位置融合保持关闭；增加等待不等于放宽硬件同步精度。
 `/perception/fusion/status` JSON 包含 `guided_clusters`、`published_cones` 和

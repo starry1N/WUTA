@@ -173,9 +173,9 @@ INS 包位于 `WUTA-SIM/wuta-ins-simulator`，并已是 `simulator_bringup` 的�
 launch 参数时不会终止已有系统。
 新消息需先构建 wuta_msgs，再构建 camera_detection、detection_fusion、cone_map_builder 及 simulator_bringup。
 算法测试分别在 camera_detection 和 detection_fusion 包内运行 `PYTHONPATH=. python3 -m pytest test -q`。
-实机已提供 ZED 2i、M1、外参与 PT 权重，默认使用 PyTorch CUDA；真实设备入口为
+实机已提供 ZED 2i、M1、外参与 TensorRT engine，默认使用 TensorRT FP16；真实设备入口为
 `./start_simulator.sh --hardware --skip-build --rviz`。权重放在
-`WUTA-FSD/ros2_ws/src/perception/camera_detection/models/best.pt`，外参放在
+`WUTA-FSD/ros2_ws/src/perception/camera_detection/models/best-new.engine`，外参放在
 `WUTA-FSD/ros2_ws/src/perception/calibration/camera_lidar.yaml`，均不提交。
 实机新增框引导原始点云聚类，并默认过滤未匹配雷达目标。模拟检测仍不能用于评价模型
 性能。接口见 [LATE_FUSION.md](LATE_FUSION.md)，今日完成项、现场复测和未解决问题见
