@@ -1,6 +1,15 @@
 # 工控机实机感知与可视化
 
-当前默认加载 `best-new.engine`（TensorRT 10.9 FP16，固定 1280x768，batch 1）。
+当前默认加载 `yolov8sp2-int8.engine`（YOLOv8s TensorRT INT8，输入 1280x768）。
+实地调参总 YAML、实时橙锥模式和 2026-09-25 实测记录已集中在
+[perception/config/README.md](../WUTA-FSD/ros2_ws/src/perception/config/README.md)；
+参数文件为 [field_tuning.yaml](../WUTA-FSD/ros2_ws/src/perception/config/field_tuning.yaml)。
+启动脚本默认读取该 YAML，`--field-config PATH` 可指定另一份，命令行 `name:=value`
+覆盖文件值。
+
+以下是 2026-09-15 的历史 FP16 测试记录，供性能对比：
+
+当时默认加载 `best-new.engine`（TensorRT 10.9 FP16，固定 1280x768，batch 1）。
 使用已有两锥桶图和 GTX 1660 SUPER 测得纯 engine 中位约 25.8 ms；通过 WUTA
 相机后端执行的完整检测调用中位约 32.6 ms（含预处理、传输与 NMS）。
 首次部署请先运行 `./start_hardware_fusion.sh --build-only --lightweight`，
@@ -37,10 +46,10 @@ M1 UDP 6699/7788 端口；若端口仍由 WUTA launch 之外的进程占用，�
 
 ```bash
 ./start_hardware_fusion.sh --skip-build --rviz \
-  --model WUTA-FSD/ros2_ws/src/perception/camera_detection/models/best-new.engine \
-  model_input_width:=1280 model_input_height:=760 \
+  --model WUTA-FSD/ros2_ws/src/perception/camera_detection/models/yolov8sp2-int8.engine \
+  model_input_width:=1280 model_input_height:=768 \
   --calibration WUTA-FSD/ros2_ws/src/perception/calibration/camera_lidar.yaml \
-  confidence_threshold:=0.25 inference_threads:=4 fusion_wait_sec:=1.2 \
+  confidence_threshold:=0.25 inference_threads:=4 fusion_wait_sec:=0.10 \
   publish_annotated_image:=true publish_unmatched_lidar:=false red_color:=3
 ```
 
@@ -72,6 +81,12 @@ RViz 仅保留上述点云与锥桶地图两项；YOLO 图像通过独立 rqt_im
 图像和点云均用 Best Effort/Volatile；绘框图像保留曝光时间和原图分辨率，
 刷新频率由 GPU 推理速度决定。没有检测时仍显示无框画面。
 点云通过实时 `map <- rslidar` TF 显示；若点云提示变换错误，应检查 ZED 定位 TF 的时间覆盖范围。
+
+实时橙锥调试使用 `./start_hardware_fusion.sh --debug-orange --rviz`。
+该模式自动改用 `hardware_debug_orange.rviz`，固定帧为 `rslidar`，显示
+`/perception/debug/orange_markers` 的当前橙锥及 XYZ。每帧会清除旧标记，
+并且不启动累积式地图节点；深度或局部聚类失败时可由正常融合输出补位。
+不带 `--debug-orange` 时恢复上表的累积地图视图。
 
 ## 今日开发记录与验收边界（2026-09-15）
 

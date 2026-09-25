@@ -22,13 +22,19 @@ usage() {
     echo '  --build-only            Build perception packages without launching'
     echo '  --lightweight           Build C++ packages with one compiler job'
     echo '  --no-drivers            Use external camera/LiDAR drivers; start perception nodes'
-    echo '  --model PATH            Override PT, ONNX, or engine weights (default best-new.engine)'
+    echo '  --debug-orange          Publish direct orange-cone position from each raw LiDAR cloud'
+    echo '  --field-config PATH     Load field tuning YAML (default WUTA-FSD/ros2_ws/src/perception/config/field_tuning.yaml)'
+    echo '  --model PATH            Override PT, ONNX, or engine weights (default yolov8sp2-int8.engine)'
     echo '  --calibration PATH      Override camera-from-LiDAR YAML'
     echo '  --rviz-config PATH      Override live RViz configuration'
     echo '  --show-args             Print all ROS launch arguments without launching'
     echo 'ROS args: image_topic:=... lidar_topic:=... depth_topic:=... info_topic:=...'
-    echo '  confidence_threshold:=0.5 inference_threads:=4 fusion_wait_sec:=1.2'
-    echo '  model_input_width:=1280 model_input_height:=760 (best-new.engine defaults)'
+    echo '  confidence_threshold:=0.5 inference_threads:=4 fusion_wait_sec:=0.10'
+    echo '  model_input_width:=1280 model_input_height:=768 (YOLOv8s INT8 engine defaults)'
+    echo '  lidar_voxel_before_ground:=true lidar_voxel_leaf_size:=0.08 profile_lidar:=false'
+    echo '  detector_backend:=auto|cpp|python (auto uses C++ for LW-DETR; YOLO uses Python/TensorRT)'
+    echo '  adapter_backend:=cpp|python (default cpp; python is the fallback)'
+    echo '  fusion_backend:=cpp|python (default cpp; python is the fallback)'
     echo '  publish_annotated_image:=true red_color:=3 (red -> ORANGE)'
     echo '  device:=cuda gpu_device_id:=0 (CPU requires explicit device:=cpu)'
 }
@@ -40,9 +46,10 @@ SHOW_ARGS=0
 OPEN_IMAGE_VIEW=-1
 IMAGE_VIEW_TOPIC=/camera/yolo/image_annotated
 LIVE_RVIZ_CONFIG="${FSD_WS}/src/perception/detection_fusion/config/hardware.rviz"
-LAUNCH_ARGS=("model_path:=${FSD_WS}/src/perception/camera_detection/models/best-new.engine"
+RVIZ_CONFIG_EXPLICIT=0
+LAUNCH_ARGS=("model_path:=${FSD_WS}/src/perception/camera_detection/models/yolov8sp2-int8.engine"
     "calibration_path:=${FSD_WS}/src/perception/calibration/camera_lidar.yaml"
-    "model_input_width:=1280" "model_input_height:=760")
+    "model_input_width:=1280" "model_input_height:=768")
 set_launch_arg() {
     local name="${1%%:=*}" index
     for index in "${!LAUNCH_ARGS[@]}"; do
@@ -53,6 +60,19 @@ set_launch_arg() {
     done
     LAUNCH_ARGS+=("$1")
 }
+FIELD_CONFIG="${FSD_WS}/src/perception/config/field_tuning.yaml"
+FIELD_SCAN_ARGS=("$@")
+for ((index=0; index<${#FIELD_SCAN_ARGS[@]}; index++)); do
+    if [[ "${FIELD_SCAN_ARGS[index]}" == --field-config ]]; then
+        ((index + 1 < ${#FIELD_SCAN_ARGS[@]})) || { echo '--field-config requires a path' >&2; exit 2; }
+        FIELD_CONFIG="$(realpath -m -- "${FIELD_SCAN_ARGS[index+1]}")"
+    fi
+done
+[[ -f "${FIELD_CONFIG}" ]] || { echo "Missing field tuning YAML: ${FIELD_CONFIG}" >&2; exit 1; }
+FIELD_LAUNCH_ARGS="$(/usr/bin/python3 "${HARDWARE_ROOT}/tools/field_tuning_args.py" "${FIELD_CONFIG}")"
+while IFS= read -r field_arg; do
+    [[ -n "${field_arg}" ]] && set_launch_arg "${field_arg}"
+done <<< "${FIELD_LAUNCH_ARGS}"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --build-only) BUILD_ONLY=1; shift ;;
@@ -68,18 +88,21 @@ while [[ $# -gt 0 ]]; do
             [[ $# -ge 2 && "$2" == /* ]] || { echo '--image-view-topic requires an absolute ROS topic' >&2; exit 2; }
             IMAGE_VIEW_TOPIC="$2"; shift 2 ;;
         --no-drivers) set_launch_arg start_drivers:=false; shift ;;
+        --debug-orange) set_launch_arg debug_orange:=true; shift ;;
+        --field-config) shift 2 ;;
         --model|--calibration|--rviz-config)
             [[ $# -ge 2 && "$2" != --* ]] || { echo "$1 requires a path" >&2; exit 2; }
             case "$1" in
                 --model) set_launch_arg "model_path:=$(realpath -m -- "$2")" ;;
                 --calibration) set_launch_arg "calibration_path:=$(realpath -m -- "$2")" ;;
-                --rviz-config) LIVE_RVIZ_CONFIG="$(realpath -m -- "$2")" ;;
+                --rviz-config) LIVE_RVIZ_CONFIG="$(realpath -m -- "$2")"; RVIZ_CONFIG_EXPLICIT=1 ;;
             esac
             shift 2 ;;
         --help|-h) usage; exit 0 ;;
         *:=*)
             if [[ "$1" == rviz_config:=* ]]; then
                 LIVE_RVIZ_CONFIG="$(realpath -m -- "${1#rviz_config:=}")"
+                RVIZ_CONFIG_EXPLICIT=1
             else
                 set_launch_arg "$1"
             fi
@@ -87,6 +110,13 @@ while [[ $# -gt 0 ]]; do
         *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
 done
+if [[ "${RVIZ_CONFIG_EXPLICIT}" == 0 ]]; then
+    for arg in "${LAUNCH_ARGS[@]}"; do
+        if [[ "${arg}" == debug_orange:=true ]]; then
+            LIVE_RVIZ_CONFIG="${FSD_WS}/src/perception/detection_fusion/config/hardware_debug_orange.rviz"
+        fi
+    done
+fi
 set_launch_arg "rviz_config:=${LIVE_RVIZ_CONFIG}"
 RVIZ_REQUESTED="${VIEW_ONLY}"
 for arg in "${LAUNCH_ARGS[@]}"; do

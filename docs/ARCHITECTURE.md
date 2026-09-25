@@ -2,7 +2,7 @@
 
 > 依据：`WUTA-SIM/simulator_bringup/launch/simulator.launch.py`、各包
 > `package.xml`、`CMakeLists.txt`、`setup.py` 与节点源码。本文描述当前源码实现，
-> 实机感知联调状态更新于 2026-09-15；车辆 CAN 仍未实现。
+> 实机感知联调状态更新于 2026-09-25；车辆 CAN 仍未实现。
 
 ## 1. System Overview
 
@@ -104,12 +104,20 @@ graph TD
 | `ekf_node` / `ukf_node` / `navsat_transform_node` / `robot_localization_listener_node` | `robot_localization`（源码依赖） | 仅 `ekf_node` 是（`launch_localization=true` 且未启用真值定位） | 第三方滤波、地理坐标转换和监听工具 |
 
 `autoware_msgs`、`wuta_msgs` 和 `wuta_tools` 是接口/工具包，不提供节点。
-`camera_detection` 提供 `stereo_detection_adapter`（外部 YOLO 框+对齐深度），
-`detection_fusion` 提供 `detection_fusion_node`（投影/三维一对一关联及位置/颜色融合）。
-它们通过独立融合入口启用；`camera_detection` 另提供 `yolov8_node`，支持 PT/PyTorch
-CUDA 与 ONNX 推理。实机入口已接入外部 ZED 2i 和 M1 驱动。
+`camera_detection` 提供 C++ `stereo_detection_adapter_cpp`（检测框+对齐深度），
+并保留 Python `stereo_detection_adapter` 作为备用；
+`detection_fusion` 提供 C++ `detection_fusion_node_cpp`（投影/三维一对一关联及位置/颜色融合），
+并保留 Python `detection_fusion_node` 作为备用。
+它们通过独立融合入口启用；`camera_detection` 提供 C++ TensorRT 的
+`lwdetr_tensorrt_node`，并保留 Python `yolov8_node` 作为备用，支持 PT、ONNX
+和 TensorRT 推理。实机入口已接入外部 ZED 2i 和 M1 驱动。
 `simulator_bringup` 的 `simulated_stereo_detections` 在该入口模拟相机观测。
-详细架构、消息与限制见 [后融合说明](LATE_FUSION.md)。`kiss_icp_wrapper` 提供上述可选 sanitizer。
+详细架构、消息与限制见 [后融合说明](LATE_FUSION.md)。
+2026-09-25 实车橙锥调试增加原始点云到达即执行的相机引导局部聚类旁路；
+失败时使用正常融合的橙锥位置，发布当前帧标记并清除旧标记。
+该模式停用累积式地图节点，参数和测量记录见
+[实地调试说明](../WUTA-FSD/ros2_ws/src/perception/config/README.md)。
+`kiss_icp_wrapper` 提供上述可选 sanitizer。
 
 仿真中 `simulation_bridge` 充当临时 VCU 输入源：它周期发布 mission mode、GO/start、
 `emergency=false` 与 `inspection_trigger=false` 给 `mission_manager`。实车应由 CAN 接口替换这组

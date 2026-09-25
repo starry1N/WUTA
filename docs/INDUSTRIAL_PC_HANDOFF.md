@@ -45,12 +45,14 @@ FSD 使用 `小登测试` 分支；嵌套的 KISS-ICP 和 robot_localization 必
 ./start_simulator.sh --hardware --view-only
 ```
 
-权重位于 `WUTA-FSD/ros2_ws/src/perception/camera_detection/models/best-new.engine`，外参位于
-`WUTA-FSD/ros2_ws/src/perception/calibration/camera_lidar.yaml`。默认 TensorRT FP16，
+当前默认权重位于 `WUTA-FSD/ros2_ws/src/perception/camera_detection/models/yolov8sp2-int8.engine`，外参位于
+`WUTA-FSD/ros2_ws/src/perception/calibration/camera_lidar.yaml`。默认 TensorRT INT8，
 red 代表橙色锥桶。真实点云 `/rslidar_points` 与 ZED 注册图像/深度进入融合，ZED pose/TF
 支持独立设备建图；RViz 仅显示点云和地图，独立终端显示 YOLO 叠框图像。
 三个启动脚本实际启动前会停止旧 WUTA launch 及子进程；仅构建、查看参数和
 `--view-only` 不清理。直接 `ros2 launch` 没有这项脚本清理。
+现场门限集中在 [perception/config](../WUTA-FSD/ros2_ws/src/perception/config/README.md)；
+`--debug-orange --rviz` 仅显示当前橙锥位置，并清除旧标记。
 
 通用外部设备适配入口仍保留：
 

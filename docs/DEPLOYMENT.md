@@ -7,7 +7,7 @@
 这些驱动不在当前源码中。不要把 simulator 的 `/sim/ground_truth` 或
 `simulation_bridge` 当作实车定位源。
 
-工控机独立感知已接入外部 ZED 2i/M1 驱动与 TensorRT FP16 YOLO，可运行真实点云、图像、
+工控机独立感知已接入外部 ZED 2i/M1 驱动与 TensorRT INT8 YOLOv8s，可运行真实点云、图像、
 后融合和建图；这不包含车辆 CAN、INS 或规划控制部署验收。
 
 最低运行环境：Ubuntu + ROS 2 Humble、PCL、tf2、RViz2、Python `numpy`/`yaml`，以及
@@ -38,9 +38,10 @@ git submodule update --init --recursive
 | EKF | `WUTA-FSD/ros2_ws/src/localization/localization_manager/config/ekf.yaml` |
 | NDT/保存地图 | `WUTA-FSD/ros2_ws/src/localization/ndt_localization/config/ndt_localization.yaml` |
 | RViz | `WUTA-SIM/simulator_bringup/rviz/wuta_simulator.rviz` |
-| 实机模型 | `WUTA-FSD/ros2_ws/src/perception/camera_detection/models/best-new.engine`（本地文件） |
+| 实机默认模型 | `WUTA-FSD/ros2_ws/src/perception/camera_detection/models/yolov8sp2-int8.engine`（本地文件） |
 | 雷达相机外参 | `WUTA-FSD/ros2_ws/src/perception/calibration/camera_lidar.yaml`（本地文件） |
 | 实机 RViz / 驱动配置 | `WUTA-FSD/ros2_ws/src/perception/detection_fusion/config/hardware.rviz`、`zed_hardware.yaml`、`rsm1_hardware.yaml` |
+| 实地感知总参数与说明 | `WUTA-FSD/ros2_ws/src/perception/config/field_tuning.yaml`、`README.md` |
 
 赛道名不是以仓库根目录优先解析：LiDAR 和真值地图/颜色节点统一先查已安装的
 `lidar_sim/tracks/`（构建时由 `perception_simulation/tracks/` 复制），未安装时回退到
@@ -139,6 +140,13 @@ ZED 2i/M1 实机：`./start_simulator.sh --hardware --skip-build --rviz`；首�
 RViz 显示真实 `/rslidar_points` 和地图，独立终端显示 YOLO 图像。
 三个脚本在实际启动前清理旧 WUTA launch；仅构建、查看参数或 `--view-only` 不清理。
 直接执行 `ros2 launch` 不包含脚本的启动前清理。
+
+实地参数由根目录启动脚本默认读取
+[总 YAML](../WUTA-FSD/ros2_ws/src/perception/config/field_tuning.yaml)；
+调试当前橙锥位置时使用 `./start_hardware_fusion.sh --debug-orange --rviz`。
+该模式不启动累积地图，RViz 只绘制当前锥桶并在下一帧清除旧位置。
+完整用法与 2026-09-25 时延实测见
+[配置说明](../WUTA-FSD/ros2_ws/src/perception/config/README.md)。
 
 通用外部输入适配入口仍为 `ros2 launch detection_fusion fusion_mapping.launch.py`。
 实机位置融合保持关闭，完成位置参考/外参/误差模型验收后再开启。当前单帧 BLUE 已检出，

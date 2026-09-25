@@ -166,21 +166,27 @@ KISS-ICP 的 `lidar_odom_frame=odom`、`base_frame=base_link`，且
 
 | Topic | Type | Publisher → Subscriber |
 | --- | --- | --- |
-| `/camera/yolo/cones` | `wuta_msgs/msg/CameraConeDetectionArray` | 实机 yolov8_node（PT/ONNX/TensorRT）或外部 YOLOv8 适配发布器 → stereo_detection_adapter |
-| `/camera/yolo/image_annotated` | `sensor_msgs/msg/Image` | yolov8_node → rqt_image_view；原分辨率 bgr8，叠加框、颜色类别与置信度，保留对应曝光 stamp/frame；Best Effort/Volatile depth 5 |
-| `/perception/camera/yolo/status` | `std_msgs/msg/String` | yolov8_node → 调试工具；JSON 检测数、推理耗时、曝光 stamp_ns、device、backend（pytorch/onnxruntime/tensorrt）与 providers；Reliable/Volatile depth 10 |
-| `/camera/left/depth_registered` | `sensor_msgs/msg/Image` | 通用外部双目驱动 → stereo_detection_adapter；ZED 实机覆盖为下表话题 |
-| `/camera/left/camera_info` | `sensor_msgs/msg/CameraInfo` | 通用外部标定发布器 → stereo_detection_adapter；ZED 实机覆盖为下表话题 |
-| `/perception/camera/cones` | `wuta_msgs/msg/CameraConeDetectionArray` | stereo_detection_adapter 或 simulated_stereo_detections → detection_fusion_node |
-| `/perception/camera/camera_info` | `sensor_msgs/msg/CameraInfo` | stereo_detection_adapter 或 simulated_stereo_detections → detection_fusion_node |
-| `/perception/fused/cones` | `wuta_msgs/msg/ConeArray` | detection_fusion_node → cone_map_builder（订阅 remap） |
-| `/perception/fusion/status` | `std_msgs/msg/String` | detection_fusion_node → 调试工具；每输出帧的 JSON 计数/回退原因 |
+| `/camera/yolo/cones` | `wuta_msgs/msg/CameraConeDetectionArray` | 实机 lwdetr_tensorrt_node（C++）或备用 yolov8_node（Python）→ stereo_detection_adapter_cpp（C++）或备用 stereo_detection_adapter（Python）；Reliable/Volatile depth 10 |
+| `/camera/yolo/image_annotated` | `sensor_msgs/msg/Image` | 相机检测节点 → rqt_image_view；原分辨率 bgr8，叠加框、颜色类别与置信度，保留对应曝光 stamp/frame；Best Effort/Volatile depth 5 |
+| `/perception/camera/yolo/status` | `std_msgs/msg/String` | 相机检测节点 → 调试工具；JSON 检测数、推理耗时、曝光 stamp_ns、device、backend 与 providers；Reliable/Volatile depth 10 |
+| `/camera/left/depth_registered` | `sensor_msgs/msg/Image` | 通用外部双目驱动 → 双目深度适配节点；ZED 实机覆盖为下表话题 |
+| `/camera/left/camera_info` | `sensor_msgs/msg/CameraInfo` | 通用外部标定发布器 → 双目深度适配节点；ZED 实机覆盖为下表话题 |
+| `/perception/camera/cones` | `wuta_msgs/msg/CameraConeDetectionArray` | stereo_detection_adapter_cpp、备用 Python 适配节点或 simulated_stereo_detections → 后融合节点 |
+| `/perception/camera/camera_info` | `sensor_msgs/msg/CameraInfo` | stereo_detection_adapter_cpp、备用 Python 适配节点或 simulated_stereo_detections → 后融合节点 |
+| `/perception/fused/cones` | `wuta_msgs/msg/ConeArray` | detection_fusion_node_cpp（实机默认）或备用 detection_fusion_node（Python）→ cone_map_builder（订阅 remap） |
+| `/perception/fusion/status` | `std_msgs/msg/String` | 后融合节点 → 调试工具；每输出帧的 JSON 计数/回退原因 |
+| `/perception/debug/orange_cones` | `wuta_msgs/msg/ConeArray` | `debug_orange:=true` 时 C++ 融合节点发布；优先原始点云局部聚类，失败时使用正常融合橙锥；保留雷达帧与采样时间，Reliable/Volatile depth 10，不进入地图 |
+| `/perception/debug/orange_status` | `std_msgs/msg/String` | `debug_orange:=true` 时 C++ 融合节点发布；JSON 含 `source`、时间戳、相机时间差、橙锥数、局部聚类耗时、雷达/相机到输出及整体端到端毫秒数、XYZ；Reliable/Volatile depth 10 |
+| `/perception/debug/orange_markers` | `visualization_msgs/msg/MarkerArray` | `debug_orange:=true` 时 C++ 融合节点发布；每帧 DELETEALL 后重绘当前橙锥及 XYZ，0.25 s 自动过期；Reliable/Volatile depth 10 |
 
 原 `/perception/lidar/cones_raw` 在后融合模式由 lidar_detection 发布，融合节点订阅；
 输出频率随 LiDAR（默认 10 Hz），保留原采样 stamp/frame。相机模拟默认 20 Hz。
 输入 Best Effort/Volatile，输出 Reliable/Volatile depth 10。相机发布器两种来源互斥。
 新增消息字段、YOLO 像素坐标约定、参数及诊断见 [后融合接口契约](LATE_FUSION.md)。
 融合参数完整默认值位于 `detection_fusion/config/fusion.yaml`，均为启动参数。
+实机统一可调参数由根目录启动脚本从
+[`perception/config/field_tuning.yaml`](../WUTA-FSD/ros2_ws/src/perception/config/field_tuning.yaml)
+读取；说明见同目录 README。`debug_orange:=true` 时不启动 cone_map_builder。
 新增 builder 参数 `allow_semantic_color_correction`（bool，默认 false）和
 `semantic_color_confirmation_hits`（int，默认 1）；独立融合入口覆盖为 true/3，关闭 assign_colors。
 新增启动参数 `use_detection_fusion`（bool，默认 false）。
@@ -188,13 +194,13 @@ KISS-ICP 的 `lidar_odom_frame=odom`、`base_frame=base_link`，且
 坐标轴右/下/前，安装高度 0.5 m。物理 TF 必须采用实际标定，融合不发布车辆定位 TF。
 没有新增 Service/Action。
 
-实机 YOLO 默认图像输入为 `/zed/zed_node/rgb/image_rect_color`，适配器读取
+实机相机检测默认图像输入为 `/zed/zed_node/rgb/image_rect_color`，适配器读取
 `/zed/zed_node/depth/depth_registered` 与 `/zed/zed_node/rgb/camera_info`。
 
 | 实机 Topic | Type | Publisher → Subscriber / frame |
 | --- | --- | --- |
 | `/rslidar_points` | `sensor_msgs/msg/PointCloud2` | M1 rslidar_sdk_node → lidar_detection、detection_fusion、RViz；rslidar，SensorDataQoS |
-| `/zed/zed_node/rgb/image_rect_color` | `sensor_msgs/msg/Image` | ZED → yolov8_node；zed_left_camera_optical_frame，1280x720 BGRA 实测 |
+| `/zed/zed_node/rgb/image_rect_color` | `sensor_msgs/msg/Image` | ZED → lwdetr_tensorrt_node 或 yolov8_node；zed_left_camera_optical_frame，1280x720 BGRA 实测 |
 | `/zed/zed_node/depth/depth_registered` | `sensor_msgs/msg/Image` | ZED → stereo_detection_adapter；左目光学帧，1280x720 32FC1 米制实测 |
 | `/zed/zed_node/rgb/camera_info` | `sensor_msgs/msg/CameraInfo` | ZED → stereo_detection_adapter；对应注册图像的 P 矩阵 |
 | `/zed/zed_node/pose` | `geometry_msgs/msg/PoseStamped` | ZED → cone_map_builder 位姿订阅 remap；map 帧 |
@@ -221,10 +227,10 @@ YOLO 参数 `annotated_topic`（string，默认 `/camera/yolo/image_annotated`�
 做框内深度分层与局部三维聚类，仍要求存在满足几何门限的真实雷达点簇。
 新增 `device`（cuda/cpu，默认 cuda）和 `gpu_device_id`（非负 int，默认 0）；
 PT 后端检查 PyTorch CUDA，ONNX 后端检查 CUDAExecutionProvider，TensorRT 后端检查
-CUDA 和 engine 固定输入；GPU 不可用时明确报错，不自动改为 CPU 推理。默认模型
-best-new.engine，输入按训练配置从 1280x760 补齐到
-1280x768，类别 red/yellow/blue 映射至 ORANGE/YELLOW/BLUE。
-实机 `fusion_wait_sec` 默认 1.2 秒以等待 GPU 推理，曝光匹配容差仍为 60 ms，
+CUDA 和 engine 固定输入；GPU 不可用时明确报错，不自动改为 CPU 推理。当前默认模型
+`yolov8sp2-int8.engine`，输入 1280x768，类别 red/yellow/blue 映射至 ORANGE/YELLOW/BLUE。
+实机 `fusion_wait_sec` 默认 0.10 秒，正常融合曝光匹配容差为 30 ms；
+橙锥调试旁路的相机窗口为 60 ms，
 位置融合保持关闭；增加等待不等于放宽硬件同步精度。
 `/perception/fusion/status` JSON 包含 `guided_clusters`、`published_cones` 和
 `unmatched_filtered` 等计数。实机颜色概率门限为 0.6，地图累计至少三次颜色支持且
